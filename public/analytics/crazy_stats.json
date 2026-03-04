@@ -62,8 +62,8 @@
     }
   ],
   "jmoon_deep_dive": {
-    "total_games": 1022,
-    "total_wins": 801,
+    "total_games": 1036,
+    "total_wins": 815,
     "winrate_Late Night (10PM-4AM)": {
       "games": 389,
       "win_rate": 80.7
@@ -73,12 +73,12 @@
       "win_rate": 80.0
     },
     "winrate_Afternoon (12PM-5PM)": {
-      "games": 360,
-      "win_rate": 78.1
+      "games": 364,
+      "win_rate": 78.3
     },
     "winrate_Evening (6PM-9PM)": {
-      "games": 243,
-      "win_rate": 74.9
+      "games": 253,
+      "win_rate": 75.9
     },
     "by_day": {
       "Monday": {
@@ -86,8 +86,8 @@
         "win_rate": 83.3
       },
       "Tuesday": {
-        "games": 73,
-        "win_rate": 78.1
+        "games": 87,
+        "win_rate": 81.6
       },
       "Wednesday": {
         "games": 151,
@@ -122,8 +122,8 @@
     },
     "most_played_character": {
       "character": "JOKER",
-      "games": 279,
-      "win_rate": 80.6
+      "games": 285,
+      "win_rate": 81.1
     }
   },
   "weekend_warriors": [
@@ -146,10 +146,10 @@
     {
       "player": "ryy",
       "weekend_wr": 58.8,
-      "weekday_wr": 44.4,
-      "diff": 14.4,
+      "weekday_wr": 45.5,
+      "diff": 13.4,
       "weekend_games": 34,
-      "weekday_games": 63
+      "weekday_games": 66
     }
   ],
   "weekday_warriors": [
@@ -325,8 +325,8 @@
     },
     {
       "character": "KING DEDEDE",
-      "plays": 218,
-      "win_rate": 58.7
+      "plays": 221,
+      "win_rate": 57.9
     },
     {
       "character": "PIRANHA PLANT",
@@ -335,7 +335,7 @@
     },
     {
       "character": "GANONDORF",
-      "plays": 674,
+      "plays": 675,
       "win_rate": 56.4
     }
   ],
@@ -588,10 +588,10 @@
       "win_rate": 84.4
     },
     "2026-03": {
-      "player": "keneru",
-      "games": 7,
-      "wins": 5,
-      "win_rate": 71.4
+      "player": "jmoon",
+      "games": 14,
+      "wins": 14,
+      "win_rate": 100.0
     }
   },
   "busiest_hour": {
