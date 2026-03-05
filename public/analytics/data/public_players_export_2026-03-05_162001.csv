@@ -11,10 +11,8 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 9609,2026-01-28 03:05:53.470000,,ryan,1200,,True,1,
 9701,2026-01-30 02:57:48.715000,,lando.,1200,,True,1,
 21,2025-06-06 08:21:51.674000,Haseab,habeas,1453,CA,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/habeas.png
-61,2025-06-07 01:01:53.240000,Ryan Bailey,ryy,1283,US,False,5,https://smash-leaderboard-frontend.vercel.app/images/dps/ryy.png
 9298,2026-01-22 17:56:47.906000,,8rn,1200,,True,1,
 10458,2026-02-14 06:15:16.806000,,ben.,1200,,False,0,
-2106,2025-08-14 20:28:12.107000,unknown,unknown,1051,UN,False,7,
 9100,2026-01-14 00:32:19.706000,,niki <3,1269,JP,True,5,"https://smash-leaderboard-frontend.vercel.app/images/dps/niki.png
 "
 9841,2026-01-31 01:47:35.508000,,kèneru,1200,,True,0,
@@ -22,14 +20,15 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 8988,2026-01-08 23:47:36.897000,,.nish,1200,,True,0,
 10228,2026-02-10 08:26:44.758000,,.keneru,1200,,False,0,
 9734,2026-01-30 04:06:04.996000,,Ryanz,1200,,False,1,
+2106,2025-08-14 20:28:12.107000,unknown,unknown,1048,UN,False,7,
 3007,2025-08-29 23:59:27.908000,Landon,lando,1035,US,True,5,https://pub-7712ec77fabb4a6d996c607b226d98f0.r2.dev/lando.png
+104,2025-06-11 23:16:25.450000,Shafaq Ahmed,shafaq,1475,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/shafaq.png
 8811,2025-12-14 06:46:33.061000,,ghandi,1200,,True,0,
 8427,2025-12-10 03:50:38.003000,,cowboy,1200,,True,0,
 3758,2025-09-06 05:03:02.078000,Julien Alvarez,fckn noob,1200,US,True,1,
 10270,2026-02-11 01:41:27.097000,,dice,1200,,False,0,
 8727,2025-12-13 07:56:29.570000,,.subby,1200,,True,0,
 5793,2025-10-21 02:24:51.322000,,heidy,1014,FR,True,4,
-104,2025-06-11 23:16:25.450000,Shafaq Ahmed,shafaq,1419,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/shafaq.png
 6239,2025-11-01 00:45:52.439000,,donshelly,1200,,True,0,
 10719,2026-02-17 22:41:19.681000,,noah,1200,,False,1,
 3808,2025-09-06 07:33:50.109000,,ridlay,1200,US,True,1,
@@ -42,6 +41,7 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 5853,2025-10-22 22:12:22.395000,,alvaro,1200,,True,0,
 452,2025-07-16 02:52:05.910000,Mizan Val,mizan,969,US,True,3,https://smash-leaderboard-frontend.vercel.app/images/dps/mizan.jpg
 4484,2025-09-19 00:31:36.846000,Owen,own,1207,FR,True,8,https://smash-leaderboard-frontend.vercel.app/images/dps/own.jpg
+61,2025-06-07 01:01:53.240000,Ryan Bailey,ryy,1266,US,False,5,https://smash-leaderboard-frontend.vercel.app/images/dps/ryy.png
 2660,2025-08-23 03:35:58.021000,Zuri,zuri,1200,UK,True,1,
 767,2025-07-27 06:36:11.280000,Aadil Ali,aadil,1200,CA,False,1,
 3849,2025-09-06 22:24:39.119000,Caleb,caleb,1200,US,True,2,https://smash-leaderboard-frontend.vercel.app/images/dps/caleb.jpg
@@ -64,7 +64,6 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 4813,2025-09-20 19:43:12.476000,,n8,1200,,True,0,
 6716,2025-11-13 03:20:11.292000,,rani,1200,US,True,0,
 10817,2026-02-18 02:48:01.535000,,abeas,1200,,False,0,
-54,2025-06-07 00:44:04.633000,William Wang,will,1366,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/will.png
 3657,2025-09-05 22:37:11.688000,Hasan,gapam,1084,US,False,4,
 88,2025-06-11 01:04:53.673000,Sharif Shameem,samin,1194,US,True,8,https://smash-leaderboard-frontend.vercel.app/images/dps/samin.jpg
 35,2025-06-06 22:21:01.865000,Bihan Mahadewa,bihan,1200,US,True,1,https://smash-leaderboard-frontend.vercel.app/images/dps/bihan.png
@@ -75,6 +74,7 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 5176,2025-09-24 04:57:57.982000,,pickle,1200,CA,True,0,
 4827,2025-09-20 21:35:58.136000,,maximilian,1200,,True,0,
 1473,2025-08-07 01:18:08.142000,sky,sky,1200,US,True,0,
+54,2025-06-07 00:44:04.633000,William Wang,will,1330,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/will.png
 9155,2026-01-15 03:35:20.412000,,_shafaq,1200,,True,0,
 9156,2026-01-15 03:35:20.533000,,*niki <3,1200,,True,0,
 50,2025-06-07 00:27:31.251000,Patrick Pascual,pat,1184,PH,True,6,https://smash-leaderboard-frontend.vercel.app/images/dps/pat.png

@@ -146,10 +146,10 @@
     {
       "player": "ryy",
       "weekend_wr": 58.8,
-      "weekday_wr": 45.5,
-      "diff": 13.4,
+      "weekday_wr": 44.1,
+      "diff": 14.7,
       "weekend_games": 34,
-      "weekday_games": 66
+      "weekday_games": 68
     }
   ],
   "weekday_warriors": [
@@ -197,7 +197,7 @@
   "longest_losing_streaks": [
     {
       "player": "unknown",
-      "streak": 46
+      "streak": 47
     },
     {
       "player": "heidy",
@@ -288,7 +288,7 @@
   "cursed_characters": [
     {
       "character": "UNKNOWN",
-      "plays": 46,
+      "plays": 47,
       "win_rate": 0.0
     },
     {
@@ -597,7 +597,7 @@
   "busiest_hour": {
     "hour": 18,
     "hour_formatted": "18:00 - 19:00",
-    "games": 1199
+    "games": 1203
   },
   "quietest_hour": {
     "hour": 8,
