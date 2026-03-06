@@ -14,7 +14,7 @@
     },
     "Thursday": {
       "character": "ZELDA",
-      "plays": 195
+      "plays": 204
     },
     "Friday": {
       "character": "MR. GAME & WATCH",
@@ -197,7 +197,7 @@
   "longest_losing_streaks": [
     {
       "player": "unknown",
-      "streak": 47
+      "streak": 49
     },
     {
       "player": "heidy",
@@ -244,8 +244,8 @@
     },
     {
       "player": "shafaq",
-      "sd_games": 49,
-      "sd_win_rate": 65.3
+      "sd_games": 50,
+      "sd_win_rate": 64.0
     },
     {
       "player": "strike",
@@ -288,7 +288,7 @@
   "cursed_characters": [
     {
       "character": "UNKNOWN",
-      "plays": 47,
+      "plays": 49,
       "win_rate": 0.0
     },
     {
@@ -324,8 +324,8 @@
       "win_rate": 64.6
     },
     {
-      "character": "KING DEDEDE",
-      "plays": 221,
+      "character": "BOWSER",
+      "plays": 159,
       "win_rate": 57.9
     },
     {
@@ -597,7 +597,7 @@
   "busiest_hour": {
     "hour": 18,
     "hour_formatted": "18:00 - 19:00",
-    "games": 1203
+    "games": 1233
   },
   "quietest_hour": {
     "hour": 8,

@@ -21,7 +21,7 @@
   "worst_losing_streak": {
     "stat": "Longest Losing Streak",
     "player": "unknown",
-    "value": "47 consecutive losses",
+    "value": "49 consecutive losses",
     "detail": "Kept coming back for more. That's dedication."
   },
   "best_winning_streak": {
@@ -74,9 +74,9 @@
   },
   "weekend_warrior": {
     "stat": "Weekend Warrior",
-    "player": "gapam",
-    "value": "+20.2% on weekends",
-    "detail": "Weekend: 44.4% vs Weekday: 24.2%"
+    "player": "jean",
+    "value": "+19.8% on weekends",
+    "detail": "Weekend: 50.0% vs Weekday: 30.2%"
   },
   "weekday_grinder": {
     "stat": "Weekday Warrior",
@@ -106,7 +106,7 @@
     "stat": "Most Cursed Character",
     "player": "UNKNOWN",
     "value": "0.0% win rate",
-    "detail": "Across 47 games. Just don't pick it."
+    "detail": "Across 49 games. Just don't pick it."
   },
   "most_blessed_char": {
     "stat": "Most Blessed Character",
@@ -135,8 +135,8 @@
   "comeback_king": {
     "stat": "Comeback King",
     "player": "shafaq",
-    "value": "65.3% win rate with SDs",
-    "detail": "Still wins 65% of the time after self-destructing"
+    "value": "64.0% win rate with SDs",
+    "detail": "Still wins 64% of the time after self-destructing"
   },
   "most_improved": {
     "stat": "Most Improved Player",
