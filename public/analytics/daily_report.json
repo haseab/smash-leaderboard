@@ -1,109 +1,179 @@
 {
-  "date": "March 06, 2026",
-  "generated_at": "2026-03-07T16:08:02.789724",
-  "headline": "ACTION-PACKED DAY: 18 MATCHES, 76 KOS!",
-  "report": "What a day at the Smash Arena! We witnessed 18 intense matches with a combined 76 knockouts.\n\nhabeas was the workhorse of the day, grinding through 18 matches with 4 victories.\n\nThe hottest player was jmoon who maintained an impressive 76.5% win rate.\n\nWe even saw perfection today - jmoon delivered a flawless 3-0 with GANONDORF!\n\nThe arena awaits more battles tomorrow. Who will rise to the top?",
+  "date": "March 07, 2026",
+  "generated_at": "2026-03-08T16:08:34.653039",
+  "headline": "ACTION-PACKED DAY: 15 MATCHES, 91 KOS!",
+  "report": "What a day at the Smash Arena! We witnessed 15 intense matches with a combined 91 knockouts.\n\nnish was the workhorse of the day, grinding through 9 matches with 3 victories.\n\nThe hottest player was will who maintained an impressive 100.0% win rate.\n\nThe arena awaits more battles tomorrow. Who will rise to the top?",
   "player_of_the_day": {
-    "name": "habeas",
-    "reason": "Most active player with 18 games"
+    "name": "nish",
+    "reason": "Most active player with 9 games"
   },
   "highlights": [
-    "18 total matches played",
-    "habeas most active with 18 games",
-    "4 perfect game(s) achieved"
+    "15 total matches played",
+    "nish most active with 9 games"
   ],
   "stats_summary": {
-    "total_matches": 18,
-    "total_kos": 76,
+    "total_matches": 15,
+    "total_kos": 91,
     "player_stats": [
       {
-        "name": "habeas",
-        "games": 18,
-        "wins": 4,
-        "losses": 14,
-        "win_rate": 22.2,
-        "kos": 31,
-        "falls": 43,
-        "sds": 1,
-        "kd_ratio": 0.72,
-        "main_character": "GANONDORF",
-        "character_games": 17
+        "name": "nish",
+        "games": 9,
+        "wins": 3,
+        "losses": 6,
+        "win_rate": 33.3,
+        "kos": 20,
+        "falls": 19,
+        "sds": 0,
+        "kd_ratio": 1.05,
+        "main_character": "SAMUS",
+        "character_games": 9
       },
       {
-        "name": "jmoon",
-        "games": 17,
-        "wins": 13,
-        "losses": 4,
-        "win_rate": 76.5,
-        "kos": 42,
-        "falls": 28,
-        "sds": 0,
+        "name": "habeas",
+        "games": 7,
+        "wins": 4,
+        "losses": 3,
+        "win_rate": 57.1,
+        "kos": 24,
+        "falls": 16,
+        "sds": 2,
         "kd_ratio": 1.5,
         "main_character": "GANONDORF",
-        "character_games": 16
+        "character_games": 4
       },
       {
-        "name": ".jmoon",
-        "games": 1,
+        "name": "keneru",
+        "games": 6,
+        "wins": 0,
+        "losses": 6,
+        "win_rate": 0.0,
+        "kos": 11,
+        "falls": 15,
+        "sds": 0,
+        "kd_ratio": 0.73,
+        "main_character": "DONKEY KONG",
+        "character_games": 5
+      },
+      {
+        "name": "pickle",
+        "games": 6,
         "wins": 1,
+        "losses": 5,
+        "win_rate": 16.7,
+        "kos": 7,
+        "falls": 17,
+        "sds": 0,
+        "kd_ratio": 0.41,
+        "main_character": "YOSHI",
+        "character_games": 3
+      },
+      {
+        "name": "fateen",
+        "games": 6,
+        "wins": 2,
+        "losses": 4,
+        "win_rate": 33.3,
+        "kos": 12,
+        "falls": 16,
+        "sds": 0,
+        "kd_ratio": 0.75,
+        "main_character": "KING K. ROOL",
+        "character_games": 6
+      },
+      {
+        "name": "will",
+        "games": 4,
+        "wins": 4,
         "losses": 0,
         "win_rate": 100.0,
-        "kos": 3,
-        "falls": 0,
+        "kos": 9,
+        "falls": 7,
         "sds": 0,
-        "kd_ratio": 3.0,
-        "main_character": "GANONDORF",
+        "kd_ratio": 1.29,
+        "main_character": "DONKEY KONG",
+        "character_games": 3
+      },
+      {
+        "name": "ryy",
+        "games": 2,
+        "wins": 2,
+        "losses": 0,
+        "win_rate": 100.0,
+        "kos": 6,
+        "falls": 4,
+        "sds": 0,
+        "kd_ratio": 1.5,
+        "main_character": "LUCINA",
+        "character_games": 1
+      },
+      {
+        "name": "stav",
+        "games": 1,
+        "wins": 0,
+        "losses": 1,
+        "win_rate": 0.0,
+        "kos": 2,
+        "falls": 3,
+        "sds": 0,
+        "kd_ratio": 0.67,
+        "main_character": "KAZUYA",
         "character_games": 1
       }
     ],
     "top_characters": [
       {
+        "character": "SAMUS",
+        "times_played": 9
+      },
+      {
+        "character": "DONKEY KONG",
+        "times_played": 8
+      },
+      {
+        "character": "KING K. ROOL",
+        "times_played": 7
+      },
+      {
         "character": "GANONDORF",
-        "times_played": 34
+        "times_played": 4
       },
       {
-        "character": "LITTLE MAC",
-        "times_played": 2
+        "character": "LUCINA",
+        "times_played": 3
       }
     ],
-    "perfect_games": [
-      {
-        "player": "jmoon",
-        "character": "GANONDORF"
-      },
-      {
-        "player": "jmoon",
-        "character": "GANONDORF"
-      },
-      {
-        "player": ".jmoon",
-        "character": "GANONDORF"
-      },
-      {
-        "player": "habeas",
-        "character": "GANONDORF"
-      }
-    ],
+    "perfect_games": [],
     "rivalries": [
       {
-        "player1": "habeas",
-        "player2": "jmoon",
-        "total_games": 17,
-        "p1_wins": 4,
-        "p2_wins": 13
+        "player1": "keneru",
+        "player2": "will",
+        "total_games": 4,
+        "p1_wins": 0,
+        "p2_wins": 4
       },
       {
         "player1": "habeas",
-        "player2": ".jmoon",
-        "total_games": 1,
+        "player2": "nish",
+        "total_games": 3,
+        "p1_wins": 3,
+        "p2_wins": 0
+      },
+      {
+        "player1": "keneru",
+        "player2": "ryy",
+        "total_games": 2,
         "p1_wins": 0,
-        "p2_wins": 1
+        "p2_wins": 2
       }
     ],
     "win_streaks": [
       {
-        "player": "jmoon",
-        "streak": 5
+        "player": "will",
+        "streak": 4
+      },
+      {
+        "player": "habeas",
+        "streak": 4
       }
     ]
   }

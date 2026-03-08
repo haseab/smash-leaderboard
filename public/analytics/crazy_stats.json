@@ -22,7 +22,7 @@
     },
     "Saturday": {
       "character": "DONKEY KONG",
-      "plays": 179
+      "plays": 187
     },
     "Sunday": {
       "character": "DONKEY KONG",
@@ -136,20 +136,20 @@
       "weekday_games": 66
     },
     {
+      "player": "ryy",
+      "weekend_wr": 61.1,
+      "weekday_wr": 44.1,
+      "diff": 17.0,
+      "weekend_games": 36,
+      "weekday_games": 68
+    },
+    {
       "player": "jean",
       "weekend_wr": 50.0,
       "weekday_wr": 35.1,
       "diff": 14.9,
       "weekend_games": 18,
       "weekday_games": 57
-    },
-    {
-      "player": "ryy",
-      "weekend_wr": 58.8,
-      "weekday_wr": 44.1,
-      "diff": 14.7,
-      "weekend_games": 34,
-      "weekday_games": 68
     }
   ],
   "weekday_warriors": [
@@ -325,8 +325,8 @@
     },
     {
       "character": "BOWSER",
-      "plays": 159,
-      "win_rate": 57.9
+      "plays": 161,
+      "win_rate": 57.8
     },
     {
       "character": "PIRANHA PLANT",
@@ -335,8 +335,8 @@
     },
     {
       "character": "KING DEDEDE",
-      "plays": 229,
-      "win_rate": 56.3
+      "plays": 230,
+      "win_rate": 56.5
     }
   ],
   "friday_night_favorites": [
@@ -388,8 +388,8 @@
   "night_owls": [
     {
       "player": "habeas",
-      "games": 782,
-      "win_rate": 44.0
+      "games": 789,
+      "win_rate": 44.1
     },
     {
       "player": "subby",
@@ -403,8 +403,8 @@
     },
     {
       "player": "nish",
-      "games": 263,
-      "win_rate": 43.7
+      "games": 272,
+      "win_rate": 43.4
     },
     {
       "player": "keneru",
@@ -425,10 +425,10 @@
     "won": false
   },
   "habeas_deep_dive": {
-    "total_games": 2505,
-    "total_wins": 1275,
-    "total_kos": 5464,
-    "total_sds": 113,
+    "total_games": 2512,
+    "total_wins": 1279,
+    "total_kos": 5488,
+    "total_sds": 115,
     "by_day": {
       "Monday": {
         "games": 228,
@@ -455,8 +455,8 @@
         "win_rate": 48.6
       },
       "Sunday": {
-        "games": 282,
-        "win_rate": 53.5
+        "games": 289,
+        "win_rate": 53.6
       }
     },
     "best_day": {
