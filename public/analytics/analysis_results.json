@@ -1,15 +1,15 @@
 {
-  "generated_at": "2026-03-09T16:24:28.157663",
+  "generated_at": "2026-03-10T16:24:37.966450",
   "overall": {
-    "total_matches": 4762,
+    "total_matches": 4770,
     "total_players": 90,
     "active_players": 29,
     "date_range_start": "2025-06-06",
-    "date_range_end": "2026-03-08",
-    "days_of_play": 275,
-    "total_kos": 22558,
-    "total_falls": 23292,
-    "total_sds": 868,
+    "date_range_end": "2026-03-09",
+    "days_of_play": 276,
+    "total_kos": 22586,
+    "total_falls": 23322,
+    "total_sds": 869,
     "unique_characters_played": 98,
     "avg_matches_per_day": 17.3,
     "avg_participants_per_match": 2.38
@@ -50,17 +50,17 @@
     {
       "id": 38,
       "name": "jmoon",
-      "total_games": 1053,
-      "wins": 828,
-      "losses": 225,
-      "win_rate": 78.6,
-      "total_kos": 2565,
-      "total_falls": 1585,
-      "total_sds": 31,
+      "total_games": 1061,
+      "wins": 833,
+      "losses": 228,
+      "win_rate": 78.5,
+      "total_kos": 2582,
+      "total_falls": 1596,
+      "total_sds": 32,
       "kd_ratio": 1.62,
       "characters_played": 71,
       "favorite_character": "JOKER",
-      "elo": 1765,
+      "elo": 1719,
       "country": "US"
     },
     {
@@ -82,17 +82,17 @@
     {
       "id": 104,
       "name": "shafaq",
-      "total_games": 803,
-      "wins": 451,
-      "losses": 352,
-      "win_rate": 56.2,
-      "total_kos": 1853,
-      "total_falls": 1539,
+      "total_games": 811,
+      "wins": 454,
+      "losses": 357,
+      "win_rate": 56.0,
+      "total_kos": 1864,
+      "total_falls": 1558,
       "total_sds": 64,
       "kd_ratio": 1.2,
       "characters_played": 21,
       "favorite_character": "ZELDA",
-      "elo": 1486,
+      "elo": 1532,
       "country": "US"
     },
     {
@@ -1483,11 +1483,11 @@
     },
     {
       "character": "ZELDA",
-      "times_played": 868,
-      "wins": 487,
+      "times_played": 872,
+      "wins": 489,
       "win_rate": 56.1,
-      "total_kos": 1955,
-      "total_falls": 1665,
+      "total_kos": 1959,
+      "total_falls": 1673,
       "total_sds": 50,
       "avg_kos_per_game": 2.25,
       "avg_falls_per_game": 1.92,
@@ -1519,12 +1519,12 @@
     },
     {
       "character": "GANONDORF",
-      "times_played": 742,
-      "wins": 417,
-      "win_rate": 56.2,
-      "total_kos": 1788,
-      "total_falls": 1471,
-      "total_sds": 46,
+      "times_played": 750,
+      "wins": 422,
+      "win_rate": 56.3,
+      "total_kos": 1805,
+      "total_falls": 1482,
+      "total_sds": 47,
       "avg_kos_per_game": 2.41,
       "avg_falls_per_game": 1.98,
       "unique_players": 16
@@ -1615,14 +1615,14 @@
     },
     {
       "character": "KING DEDEDE",
-      "times_played": 230,
-      "wins": 130,
-      "win_rate": 56.5,
-      "total_kos": 526,
-      "total_falls": 431,
+      "times_played": 234,
+      "wins": 131,
+      "win_rate": 56.0,
+      "total_kos": 533,
+      "total_falls": 442,
       "total_sds": 20,
-      "avg_kos_per_game": 2.29,
-      "avg_falls_per_game": 1.87,
+      "avg_kos_per_game": 2.28,
+      "avg_falls_per_game": 1.89,
       "unique_players": 12
     },
     {
@@ -2708,6 +2708,14 @@
       "dominance": 61.76470588235294
     },
     {
+      "player1": "jmoon",
+      "player2": "shafaq",
+      "total_matches": 62,
+      "player1_wins": 49,
+      "player2_wins": 13,
+      "dominance": 79.03225806451613
+    },
+    {
       "player1": "will",
       "player2": "shafaq",
       "total_matches": 59,
@@ -2722,14 +2730,6 @@
       "player1_wins": 39,
       "player2_wins": 18,
       "dominance": 68.42105263157895
-    },
-    {
-      "player1": "jmoon",
-      "player2": "shafaq",
-      "total_matches": 54,
-      "player1_wins": 44,
-      "player2_wins": 10,
-      "dominance": 81.48148148148148
     },
     {
       "player1": "habeas",
@@ -2836,13 +2836,13 @@
       },
       {
         "month": "2026-03",
-        "matches": 136
+        "matches": 144
       }
     ],
     "weekday": [
       {
         "day": "Monday",
-        "matches": 414
+        "matches": 422
       },
       {
         "day": "Tuesday",
@@ -2952,7 +2952,7 @@
       },
       {
         "hour": 20,
-        "matches": 109
+        "matches": 117
       },
       {
         "hour": 21,
@@ -3005,13 +3005,13 @@
         "matches": 72
       },
       {
-        "date": "2025-09-14",
+        "date": "2025-08-16",
         "matches": 70
       }
     ]
   },
   "fun_facts": {
-    "perfect_games_count": 393,
+    "perfect_games_count": 394,
     "most_kos_single_match": {
       "player": "aadil",
       "kos": 17,
@@ -3188,31 +3188,31 @@
     {
       "rank": 1,
       "name": "jmoon",
-      "elo": 1765,
-      "games": 1053,
-      "wins": 828,
-      "losses": 225,
-      "win_rate": 78.6,
+      "elo": 1719,
+      "games": 1061,
+      "wins": 833,
+      "losses": 228,
+      "win_rate": 78.5,
       "country": "US"
     },
     {
       "rank": 2,
+      "name": "shafaq",
+      "elo": 1532,
+      "games": 811,
+      "wins": 454,
+      "losses": 357,
+      "win_rate": 56.0,
+      "country": "US"
+    },
+    {
+      "rank": 3,
       "name": "amar",
       "elo": 1524,
       "games": 115,
       "wins": 63,
       "losses": 52,
       "win_rate": 54.8,
-      "country": "US"
-    },
-    {
-      "rank": 3,
-      "name": "shafaq",
-      "elo": 1486,
-      "games": 803,
-      "wins": 451,
-      "losses": 352,
-      "win_rate": 56.2,
       "country": "US"
     },
     {
@@ -4082,6 +4082,13 @@
       "win_rate": 40.0
     },
     {
+      "player": "shafaq",
+      "last_10_wins": 4,
+      "last_10_losses": 6,
+      "form_trend": "stable",
+      "win_rate": 40.0
+    },
+    {
       "player": "fateen",
       "last_10_wins": 4,
       "last_10_losses": 6,
@@ -4171,13 +4178,6 @@
       "last_10_losses": 7,
       "form_trend": "cold",
       "win_rate": 30.0
-    },
-    {
-      "player": "shafaq",
-      "last_10_wins": 2,
-      "last_10_losses": 8,
-      "form_trend": "cold",
-      "win_rate": 20.0
     },
     {
       "player": "lag",
@@ -4461,9 +4461,9 @@
       },
       {
         "month": "2026-03",
-        "games": 31,
-        "wins": 27,
-        "win_rate": 87.1
+        "games": 39,
+        "wins": 32,
+        "win_rate": 82.1
       }
     ],
     "keneru": [
@@ -4585,9 +4585,9 @@
       },
       {
         "month": "2026-03",
-        "games": 42,
-        "wins": 20,
-        "win_rate": 47.6
+        "games": 50,
+        "wins": 23,
+        "win_rate": 46.0
       }
     ],
     "nish": [

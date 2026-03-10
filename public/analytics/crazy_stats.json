@@ -62,8 +62,8 @@
     }
   ],
   "jmoon_deep_dive": {
-    "total_games": 1053,
-    "total_wins": 828,
+    "total_games": 1061,
+    "total_wins": 833,
     "winrate_Late Night (10PM-4AM)": {
       "games": 389,
       "win_rate": 80.7
@@ -73,8 +73,8 @@
       "win_rate": 80.0
     },
     "winrate_Afternoon (12PM-5PM)": {
-      "games": 381,
-      "win_rate": 78.2
+      "games": 389,
+      "win_rate": 77.9
     },
     "winrate_Evening (6PM-9PM)": {
       "games": 253,
@@ -82,8 +82,8 @@
     },
     "by_day": {
       "Monday": {
-        "games": 102,
-        "win_rate": 83.3
+        "games": 110,
+        "win_rate": 81.8
       },
       "Tuesday": {
         "games": 87,
@@ -254,8 +254,8 @@
     },
     {
       "player": "jmoon",
-      "sd_games": 31,
-      "sd_win_rate": 61.3
+      "sd_games": 32,
+      "sd_win_rate": 59.4
     },
     {
       "player": "samin",
@@ -334,9 +334,9 @@
       "win_rate": 57.8
     },
     {
-      "character": "KING DEDEDE",
-      "plays": 230,
-      "win_rate": 56.5
+      "character": "GANONDORF",
+      "plays": 750,
+      "win_rate": 56.3
     }
   ],
   "friday_night_favorites": [
@@ -474,12 +474,12 @@
       "kills": 144
     },
     {
-      "player": "amar",
-      "kills": 13
+      "player": "shafaq",
+      "kills": 15
     },
     {
-      "player": "shafaq",
-      "kills": 12
+      "player": "amar",
+      "kills": 13
     },
     {
       "player": "samin",
@@ -589,9 +589,9 @@
     },
     "2026-03": {
       "player": "jmoon",
-      "games": 31,
-      "wins": 27,
-      "win_rate": 87.1
+      "games": 39,
+      "wins": 32,
+      "win_rate": 82.1
     }
   },
   "busiest_hour": {

@@ -30,16 +30,16 @@
     },
     {
       "name": "jmoon",
-      "games": 1053,
-      "wins": 828,
-      "losses": 225,
-      "winRate": 78.6,
-      "kos": 2565,
-      "falls": 1585,
-      "sds": 31,
+      "games": 1061,
+      "wins": 833,
+      "losses": 228,
+      "winRate": 78.5,
+      "kos": 2582,
+      "falls": 1596,
+      "sds": 32,
       "kd": 1.62,
-      "sdRate": 0.029,
-      "momentum": 13.5,
+      "sdRate": 0.03,
+      "momentum": 13.0,
       "charsPlayed": 71
     },
     {
@@ -58,16 +58,16 @@
     },
     {
       "name": "shafaq",
-      "games": 803,
-      "wins": 451,
-      "losses": 352,
-      "winRate": 56.2,
-      "kos": 1853,
-      "falls": 1539,
+      "games": 811,
+      "wins": 454,
+      "losses": 357,
+      "winRate": 56.0,
+      "kos": 1864,
+      "falls": 1558,
       "sds": 64,
       "kd": 1.2,
-      "sdRate": 0.08,
-      "momentum": 12.4,
+      "sdRate": 0.079,
+      "momentum": 11.3,
       "charsPlayed": 21
     },
     {
@@ -855,16 +855,16 @@
       },
       {
         "name": "jmoon",
-        "games": 1053,
-        "wins": 828,
-        "losses": 225,
-        "winRate": 78.6,
-        "kos": 2565,
-        "falls": 1585,
-        "sds": 31,
+        "games": 1061,
+        "wins": 833,
+        "losses": 228,
+        "winRate": 78.5,
+        "kos": 2582,
+        "falls": 1596,
+        "sds": 32,
         "kd": 1.62,
-        "sdRate": 0.029,
-        "momentum": 13.5,
+        "sdRate": 0.03,
+        "momentum": 13.0,
         "charsPlayed": 71
       },
       {
@@ -883,16 +883,16 @@
       },
       {
         "name": "shafaq",
-        "games": 803,
-        "wins": 451,
-        "losses": 352,
-        "winRate": 56.2,
-        "kos": 1853,
-        "falls": 1539,
+        "games": 811,
+        "wins": 454,
+        "losses": 357,
+        "winRate": 56.0,
+        "kos": 1864,
+        "falls": 1558,
         "sds": 64,
         "kd": 1.2,
-        "sdRate": 0.08,
-        "momentum": 12.4,
+        "sdRate": 0.079,
+        "momentum": 11.3,
         "charsPlayed": 21
       },
       {
@@ -1665,7 +1665,7 @@
       104,
       38,
       180,
-      229,
+      245,
       261,
       457,
       660,
@@ -1717,7 +1717,7 @@
       "Sun"
     ],
     "data": [
-      1343,
+      1359,
       1277,
       1910,
       2173,
@@ -1749,7 +1749,7 @@
       600,
       1033,
       1030,
-      303
+      319
     ]
   },
   "allCharacters": [
@@ -1769,8 +1769,8 @@
     },
     {
       "name": "ZELDA",
-      "plays": 868,
-      "wins": 487,
+      "plays": 872,
+      "wins": 489,
       "winRate": 56.1,
       "uniquePlayers": 5
     },
@@ -1790,9 +1790,9 @@
     },
     {
       "name": "GANONDORF",
-      "plays": 742,
-      "wins": 417,
-      "winRate": 56.2,
+      "plays": 750,
+      "wins": 422,
+      "winRate": 56.3,
       "uniquePlayers": 16
     },
     {
@@ -1846,9 +1846,9 @@
     },
     {
       "name": "KING DEDEDE",
-      "plays": 230,
-      "wins": 130,
-      "winRate": 56.5,
+      "plays": 234,
+      "wins": 131,
+      "winRate": 56.0,
       "uniquePlayers": 12
     },
     {
@@ -2284,10 +2284,10 @@
     "plays": [
       1092,
       918,
-      868,
+      872,
       833,
       790,
-      742,
+      750,
       642,
       476,
       423,
@@ -2295,7 +2295,7 @@
       366,
       249,
       247,
-      230,
+      234,
       198,
       179,
       161,
@@ -2309,7 +2309,7 @@
       56.1,
       50.2,
       48.0,
-      56.2,
+      56.3,
       46.0,
       52.1,
       51.1,
@@ -2317,7 +2317,7 @@
       41.8,
       51.8,
       43.3,
-      56.5,
+      56.0,
       38.4,
       45.8,
       57.8,
@@ -2384,8 +2384,8 @@
       16.9,
       16.4,
       16.3,
-      13.5,
-      12.4,
+      13.0,
+      11.3,
       11.2,
       10.4,
       6.8,
@@ -2508,9 +2508,9 @@
     "data": [
       2541,
       1193,
-      1053,
+      1061,
       933,
-      803,
+      811,
       648,
       501,
       373,
@@ -2666,9 +2666,9 @@
           "total": 43
         },
         {
-          "wr": 81.5,
-          "wins": 44,
-          "total": 54
+          "wr": 79.0,
+          "wins": 49,
+          "total": 62
         },
         {
           "wr": 100.0,
@@ -2756,9 +2756,9 @@
           "total": 7
         },
         {
-          "wr": 18.5,
-          "wins": 10,
-          "total": 54
+          "wr": 21.0,
+          "wins": 13,
+          "total": 62
         },
         {
           "wr": 69.4,
@@ -3084,7 +3084,7 @@
         16,
         0,
         14,
-        10,
+        26,
         6,
         28,
         68,
@@ -3270,11 +3270,11 @@
       "10+"
     ],
     "data": [
-      1016,
-      481,
-      248,
-      135,
-      70,
+      1020,
+      483,
+      249,
+      133,
+      71,
       61,
       42,
       28,
@@ -3340,7 +3340,7 @@
       0.095,
       0.091,
       0.082,
-      0.08,
+      0.079,
       0.077,
       0.061,
       0.059,
@@ -3348,7 +3348,7 @@
       0.045,
       0.036,
       0.032,
-      0.029,
+      0.03,
       0.027,
       0.017,
       0.015,
@@ -4677,9 +4677,9 @@
       {
         "id": "jmoon",
         "label": "jmoon",
-        "games": 1053,
-        "winRate": 78.6,
-        "size": 45.1,
+        "games": 1061,
+        "winRate": 78.5,
+        "size": 45.36666666666667,
         "partnerships": [
           {
             "partner": "habeas",
@@ -4688,8 +4688,8 @@
           },
           {
             "partner": "shafaq",
-            "games": 75,
-            "winRate": 58.7
+            "games": 83,
+            "winRate": 59.0
           },
           {
             "partner": "heidy",
@@ -6348,9 +6348,9 @@
       {
         "id": "shafaq",
         "label": "shafaq",
-        "games": 803,
-        "winRate": 56.2,
-        "size": 36.766666666666666,
+        "games": 811,
+        "winRate": 56.0,
+        "size": 37.03333333333333,
         "partnerships": [
           {
             "partner": "habeas",
@@ -6369,8 +6369,8 @@
           },
           {
             "partner": "jmoon",
-            "games": 75,
-            "winRate": 13.3
+            "games": 83,
+            "winRate": 15.7
           },
           {
             "partner": "gapam",
@@ -6791,8 +6791,8 @@
       {
         "from": "jmoon",
         "to": "shafaq",
-        "value": 75,
-        "title": "75 games together"
+        "value": 83,
+        "title": "83 games together"
       },
       {
         "from": "jmoon",

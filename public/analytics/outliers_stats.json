@@ -9,8 +9,8 @@
   "most_dominant": {
     "stat": "Highest Win Rate (50+ games)",
     "player": "jmoon",
-    "value": "78.6%",
-    "detail": "828W - 225L across 1053 games"
+    "value": "78.5%",
+    "detail": "833W - 228L across 1061 games"
   },
   "biggest_underdog": {
     "stat": "Lowest Win Rate (50+ games)",
@@ -34,7 +34,7 @@
     "stat": "Best KO/Death Ratio",
     "player": "jmoon",
     "value": "1.62 K/D",
-    "detail": "2565 KOs, 1585 deaths"
+    "detail": "2582 KOs, 1596 deaths"
   },
   "worst_kd": {
     "stat": "Worst KO/Death Ratio",
@@ -123,8 +123,8 @@
   "best_day_performance": {
     "stat": "Best Monday Player",
     "player": "jmoon",
-    "value": "86.6% win rate",
-    "detail": "On Mondays across 142 games"
+    "value": "85.3% win rate",
+    "detail": "On Mondays across 150 games"
   },
   "worst_day_performance": {
     "stat": "Worst Monday Player",
@@ -165,7 +165,7 @@
   "perfect_game_master": {
     "stat": "Most Perfect Games",
     "player": "jmoon",
-    "value": "117 flawless victories",
+    "value": "118 flawless victories",
     "detail": "That's 11.1% of their games"
   },
   "single_game_kos": {

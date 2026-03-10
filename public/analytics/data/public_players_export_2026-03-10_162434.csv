@@ -15,6 +15,7 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 5853,2025-10-22 22:12:22.395000,,alvaro,1200,,True,0,
 452,2025-07-16 02:52:05.910000,Mizan Val,mizan,969,US,True,3,https://smash-leaderboard-frontend.vercel.app/images/dps/mizan.jpg
 4484,2025-09-19 00:31:36.846000,Owen,own,1207,FR,True,8,https://smash-leaderboard-frontend.vercel.app/images/dps/own.jpg
+104,2025-06-11 23:16:25.450000,Shafaq Ahmed,shafaq,1532,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/shafaq.png
 2106,2025-08-14 20:28:12.107000,unknown,unknown,1032,UN,False,7,
 10064,2026-02-08 02:50:45.155000,,_fateen,1200,,True,1,
 21,2025-06-06 08:21:51.674000,Haseab,habeas,1450,CA,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/habeas.png
@@ -35,7 +36,6 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 "
 9841,2026-01-31 01:47:35.508000,,kèneru,1200,,True,0,
 9326,2026-01-22 18:14:00.139000,,oh,1200,,True,1,
-104,2025-06-11 23:16:25.450000,Shafaq Ahmed,shafaq,1486,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/shafaq.png
 8988,2026-01-08 23:47:36.897000,,.nish,1200,,True,0,
 10228,2026-02-10 08:26:44.758000,,.keneru,1200,,False,0,
 9734,2026-01-30 04:06:04.996000,,Ryanz,1200,,False,1,
@@ -53,6 +53,7 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 2586,2025-08-23 00:44:14.138000,Safi,safi,1388,US,False,8,https://smash-leaderboard-frontend.vercel.app/images/dps/safi.jpg
 23,2025-06-06 08:31:02.716000,Anish Thite,nish,1190,US,False,6,https://smash-leaderboard-frontend.vercel.app/images/dps/nish.png
 39,2025-06-06 23:46:35.620000,Kareem Dasilva,keneru,1249,US,False,8,https://smash-leaderboard-frontend.vercel.app/images/dps/keneru.png
+38,2025-06-06 23:41:48.713000,Jonathan Moon,jmoon,1719,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/jmoon.png
 2660,2025-08-23 03:35:58.021000,Zuri,zuri,1200,UK,True,1,
 767,2025-07-27 06:36:11.280000,Aadil Ali,aadil,1200,CA,False,1,
 3849,2025-09-06 22:24:39.119000,Caleb,caleb,1200,US,True,2,https://smash-leaderboard-frontend.vercel.app/images/dps/caleb.jpg
@@ -68,7 +69,6 @@ id,created_at,name,display_name,elo,country,inactive,top_ten_played,picture
 10231,2026-02-10 08:28:13.855000,,. keneru,1200,,False,0,
 8661,2025-12-11 10:09:29.715000,,vora,1200,,True,0,
 2207,2025-08-15 06:42:32.079000,Zach Eisenhauer,spd,1200,US,True,1,
-38,2025-06-06 23:41:48.713000,Jonathan Moon,jmoon,1765,US,False,9,https://smash-leaderboard-frontend.vercel.app/images/dps/jmoon.png
 96,2025-06-11 01:38:28.959000,Ryan Pantig,RP,1200,US,True,1,https://smash-leaderboard-frontend.vercel.app/images/dps/rp.png
 4813,2025-09-20 19:43:12.476000,,n8,1200,,True,0,
 6716,2025-11-13 03:20:11.292000,,rani,1200,US,True,0,
