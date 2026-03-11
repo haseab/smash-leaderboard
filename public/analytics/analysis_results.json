@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-03-10T16:24:37.966450",
+  "generated_at": "2026-03-11T16:20:26.575766",
   "overall": {
-    "total_matches": 4770,
+    "total_matches": 4773,
     "total_players": 90,
-    "active_players": 29,
+    "active_players": 25,
     "date_range_start": "2025-06-06",
-    "date_range_end": "2026-03-09",
-    "days_of_play": 276,
-    "total_kos": 22586,
-    "total_falls": 23322,
+    "date_range_end": "2026-03-11",
+    "days_of_play": 277,
+    "total_kos": 22594,
+    "total_falls": 23331,
     "total_sds": 869,
     "unique_characters_played": 98,
-    "avg_matches_per_day": 17.3,
+    "avg_matches_per_day": 17.2,
     "avg_participants_per_match": 2.38
   },
   "players": [
@@ -50,17 +50,17 @@
     {
       "id": 38,
       "name": "jmoon",
-      "total_games": 1061,
-      "wins": 833,
-      "losses": 228,
+      "total_games": 1064,
+      "wins": 835,
+      "losses": 229,
       "win_rate": 78.5,
-      "total_kos": 2582,
-      "total_falls": 1596,
+      "total_kos": 2588,
+      "total_falls": 1598,
       "total_sds": 32,
       "kd_ratio": 1.62,
       "characters_played": 71,
       "favorite_character": "JOKER",
-      "elo": 1719,
+      "elo": 1707,
       "country": "US"
     },
     {
@@ -82,17 +82,17 @@
     {
       "id": 104,
       "name": "shafaq",
-      "total_games": 811,
-      "wins": 454,
-      "losses": 357,
+      "total_games": 813,
+      "wins": 455,
+      "losses": 358,
       "win_rate": 56.0,
-      "total_kos": 1864,
-      "total_falls": 1558,
+      "total_kos": 1865,
+      "total_falls": 1562,
       "total_sds": 64,
-      "kd_ratio": 1.2,
+      "kd_ratio": 1.19,
       "characters_played": 21,
       "favorite_character": "ZELDA",
-      "elo": 1532,
+      "elo": 1549,
       "country": "US"
     },
     {
@@ -114,17 +114,17 @@
     {
       "id": 54,
       "name": "will",
-      "total_games": 501,
+      "total_games": 502,
       "wins": 247,
-      "losses": 254,
-      "win_rate": 49.3,
-      "total_kos": 988,
-      "total_falls": 1042,
+      "losses": 255,
+      "win_rate": 49.2,
+      "total_kos": 989,
+      "total_falls": 1045,
       "total_sds": 16,
       "kd_ratio": 0.95,
       "characters_played": 32,
       "favorite_character": "JOKER",
-      "elo": 1409,
+      "elo": 1404,
       "country": "US"
     },
     {
@@ -1483,26 +1483,26 @@
     },
     {
       "character": "ZELDA",
-      "times_played": 872,
-      "wins": 489,
+      "times_played": 874,
+      "wins": 490,
       "win_rate": 56.1,
-      "total_kos": 1959,
-      "total_falls": 1673,
+      "total_kos": 1960,
+      "total_falls": 1677,
       "total_sds": 50,
-      "avg_kos_per_game": 2.25,
+      "avg_kos_per_game": 2.24,
       "avg_falls_per_game": 1.92,
       "unique_players": 5
     },
     {
       "character": "JOKER",
-      "times_played": 833,
-      "wins": 418,
+      "times_played": 836,
+      "wins": 420,
       "win_rate": 50.2,
-      "total_kos": 1496,
-      "total_falls": 1589,
+      "total_kos": 1502,
+      "total_falls": 1591,
       "total_sds": 37,
       "avg_kos_per_game": 1.8,
-      "avg_falls_per_game": 1.91,
+      "avg_falls_per_game": 1.9,
       "unique_players": 11
     },
     {
@@ -1543,11 +1543,11 @@
     },
     {
       "character": "INCINEROAR",
-      "times_played": 476,
+      "times_played": 477,
       "wins": 248,
-      "win_rate": 52.1,
-      "total_kos": 1024,
-      "total_falls": 942,
+      "win_rate": 52.0,
+      "total_kos": 1025,
+      "total_falls": 945,
       "total_sds": 19,
       "avg_kos_per_game": 2.15,
       "avg_falls_per_game": 1.98,
@@ -2710,10 +2710,10 @@
     {
       "player1": "jmoon",
       "player2": "shafaq",
-      "total_matches": 62,
-      "player1_wins": 49,
-      "player2_wins": 13,
-      "dominance": 79.03225806451613
+      "total_matches": 64,
+      "player1_wins": 50,
+      "player2_wins": 14,
+      "dominance": 78.125
     },
     {
       "player1": "will",
@@ -2836,7 +2836,7 @@
       },
       {
         "month": "2026-03",
-        "matches": 144
+        "matches": 147
       }
     ],
     "weekday": [
@@ -2850,7 +2850,7 @@
       },
       {
         "day": "Wednesday",
-        "matches": 615
+        "matches": 618
       },
       {
         "day": "Thursday",
@@ -2872,7 +2872,7 @@
     "hourly": [
       {
         "hour": 0,
-        "matches": 406
+        "matches": 409
       },
       {
         "hour": 1,
@@ -2985,11 +2985,11 @@
         "matches": 98
       },
       {
-        "date": "2025-09-06",
+        "date": "2025-09-20",
         "matches": 85
       },
       {
-        "date": "2025-09-20",
+        "date": "2025-09-06",
         "matches": 85
       },
       {
@@ -3005,7 +3005,7 @@
         "matches": 72
       },
       {
-        "date": "2025-08-16",
+        "date": "2025-09-14",
         "matches": 70
       }
     ]
@@ -3188,20 +3188,20 @@
     {
       "rank": 1,
       "name": "jmoon",
-      "elo": 1719,
-      "games": 1061,
-      "wins": 833,
-      "losses": 228,
+      "elo": 1707,
+      "games": 1064,
+      "wins": 835,
+      "losses": 229,
       "win_rate": 78.5,
       "country": "US"
     },
     {
       "rank": 2,
       "name": "shafaq",
-      "elo": 1532,
-      "games": 811,
-      "wins": 454,
-      "losses": 357,
+      "elo": 1549,
+      "games": 813,
+      "wins": 455,
+      "losses": 358,
       "win_rate": 56.0,
       "country": "US"
     },
@@ -3228,11 +3228,11 @@
     {
       "rank": 5,
       "name": "will",
-      "elo": 1409,
-      "games": 501,
+      "elo": 1404,
+      "games": 502,
       "wins": 247,
-      "losses": 254,
-      "win_rate": 49.3,
+      "losses": 255,
+      "win_rate": 49.2,
       "country": "US"
     },
     {
@@ -3427,22 +3427,22 @@
     },
     {
       "rank": 25,
-      "name": "pickle",
-      "elo": 1200,
-      "games": 15,
-      "wins": 2,
-      "losses": 13,
-      "win_rate": 13.3,
-      "country": "CA"
-    },
-    {
-      "rank": 26,
       "name": "aadil",
       "elo": 1200,
       "games": 37,
       "wins": 14,
       "losses": 23,
       "win_rate": 37.8,
+      "country": "CA"
+    },
+    {
+      "rank": 26,
+      "name": "pickle",
+      "elo": 1200,
+      "games": 15,
+      "wins": 2,
+      "losses": 13,
+      "win_rate": 13.3,
       "country": "CA"
     },
     {
@@ -3837,9 +3837,9 @@
     {
       "character1": "JOKER",
       "character2": "ZELDA",
-      "total_matches": 46,
-      "char1_win_rate": 63.0,
-      "char2_win_rate": 37.0
+      "total_matches": 48,
+      "char1_win_rate": 62.5,
+      "char2_win_rate": 37.5
     },
     {
       "character1": "CAPTAIN FALCON",
@@ -3984,13 +3984,6 @@
       "win_rate": 70.0
     },
     {
-      "player": "jmoon",
-      "last_10_wins": 7,
-      "last_10_losses": 3,
-      "form_trend": "stable",
-      "win_rate": 70.0
-    },
-    {
       "player": "safi",
       "last_10_wins": 7,
       "last_10_losses": 3,
@@ -3999,6 +3992,13 @@
     },
     {
       "player": "habeas",
+      "last_10_wins": 6,
+      "last_10_losses": 4,
+      "form_trend": "stable",
+      "win_rate": 60.0
+    },
+    {
+      "player": "jmoon",
       "last_10_wins": 6,
       "last_10_losses": 4,
       "form_trend": "stable",
@@ -4461,9 +4461,9 @@
       },
       {
         "month": "2026-03",
-        "games": 39,
-        "wins": 32,
-        "win_rate": 82.1
+        "games": 42,
+        "wins": 34,
+        "win_rate": 81.0
       }
     ],
     "keneru": [
@@ -4585,9 +4585,9 @@
       },
       {
         "month": "2026-03",
-        "games": 50,
-        "wins": 23,
-        "win_rate": 46.0
+        "games": 52,
+        "wins": 24,
+        "win_rate": 46.2
       }
     ],
     "nish": [
@@ -4709,9 +4709,9 @@
       },
       {
         "month": "2026-03",
-        "games": 37,
+        "games": 38,
         "wins": 17,
-        "win_rate": 45.9
+        "win_rate": 44.7
       }
     ],
     "ya": [

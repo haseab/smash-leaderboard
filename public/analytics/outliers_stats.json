@@ -10,7 +10,7 @@
     "stat": "Highest Win Rate (50+ games)",
     "player": "jmoon",
     "value": "78.5%",
-    "detail": "833W - 228L across 1061 games"
+    "detail": "835W - 229L across 1064 games"
   },
   "biggest_underdog": {
     "stat": "Lowest Win Rate (50+ games)",
@@ -34,7 +34,7 @@
     "stat": "Best KO/Death Ratio",
     "player": "jmoon",
     "value": "1.62 K/D",
-    "detail": "2582 KOs, 1596 deaths"
+    "detail": "2588 KOs, 1598 deaths"
   },
   "worst_kd": {
     "stat": "Worst KO/Death Ratio",
@@ -94,7 +94,7 @@
     "stat": "Best After 10PM",
     "player": "jmoon",
     "value": "78.3% win rate",
-    "detail": "Across 494 late-night games"
+    "detail": "Across 497 late-night games"
   },
   "giant_killer": {
     "stat": "Most Wins vs jmoon",

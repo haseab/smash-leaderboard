@@ -1,75 +1,89 @@
 {
-  "date": "March 09, 2026",
-  "generated_at": "2026-03-10T16:25:36.015841",
-  "headline": "ACTION-PACKED DAY: 8 MATCHES, 28 KOS!",
-  "report": "What a day at the Smash Arena! We witnessed 8 intense matches with a combined 28 knockouts.\n\nshafaq was the workhorse of the day, grinding through 8 matches with 3 victories.\n\nThe hottest player was jmoon who maintained an impressive 62.5% win rate.\n\nWe even saw perfection today - jmoon delivered a flawless 3-0 with GANONDORF!\n\nThe arena awaits more battles tomorrow. Who will rise to the top?",
+  "date": "March 10, 2026",
+  "generated_at": "2026-03-11T16:21:38.538995",
+  "headline": "ACTION-PACKED DAY: 3 MATCHES, 8 KOS!",
+  "report": "What a day at the Smash Arena! We witnessed 3 intense matches with a combined 8 knockouts.\n\njmoon was the workhorse of the day, grinding through 3 matches with 2 victories.\n\nThe hottest player was jmoon who maintained an impressive 66.7% win rate.\n\nThe arena awaits more battles tomorrow. Who will rise to the top?",
   "player_of_the_day": {
-    "name": "shafaq",
-    "reason": "Most active player with 8 games"
+    "name": "jmoon",
+    "reason": "Most active player with 3 games"
   },
   "highlights": [
-    "8 total matches played",
-    "shafaq most active with 8 games",
-    "1 perfect game(s) achieved"
+    "3 total matches played",
+    "jmoon most active with 3 games"
   ],
   "stats_summary": {
-    "total_matches": 8,
-    "total_kos": 28,
+    "total_matches": 3,
+    "total_kos": 8,
     "player_stats": [
       {
-        "name": "shafaq",
-        "games": 8,
-        "wins": 3,
-        "losses": 5,
-        "win_rate": 37.5,
-        "kos": 11,
-        "falls": 19,
+        "name": "jmoon",
+        "games": 3,
+        "wins": 2,
+        "losses": 1,
+        "win_rate": 66.7,
+        "kos": 6,
+        "falls": 2,
         "sds": 0,
-        "kd_ratio": 0.58,
-        "main_character": "KING DEDEDE",
-        "character_games": 4
+        "kd_ratio": 3.0,
+        "main_character": "JOKER",
+        "character_games": 3
       },
       {
-        "name": "jmoon",
-        "games": 8,
-        "wins": 5,
-        "losses": 3,
-        "win_rate": 62.5,
-        "kos": 17,
-        "falls": 11,
-        "sds": 1,
-        "kd_ratio": 1.55,
-        "main_character": "GANONDORF",
-        "character_games": 8
+        "name": "shafaq",
+        "games": 2,
+        "wins": 1,
+        "losses": 1,
+        "win_rate": 50.0,
+        "kos": 1,
+        "falls": 4,
+        "sds": 0,
+        "kd_ratio": 0.25,
+        "main_character": "ZELDA",
+        "character_games": 2
+      },
+      {
+        "name": "will",
+        "games": 1,
+        "wins": 0,
+        "losses": 1,
+        "win_rate": 0.0,
+        "kos": 1,
+        "falls": 3,
+        "sds": 0,
+        "kd_ratio": 0.33,
+        "main_character": "INCINEROAR",
+        "character_games": 1
       }
     ],
     "top_characters": [
       {
-        "character": "GANONDORF",
-        "times_played": 8
-      },
-      {
-        "character": "KING DEDEDE",
-        "times_played": 4
+        "character": "JOKER",
+        "times_played": 3
       },
       {
         "character": "ZELDA",
-        "times_played": 4
-      }
-    ],
-    "perfect_games": [
+        "times_played": 2
+      },
       {
-        "player": "jmoon",
-        "character": "GANONDORF"
+        "character": "INCINEROAR",
+        "times_played": 1
       }
     ],
+    "perfect_games": [],
     "rivalries": [
       {
         "player1": "jmoon",
         "player2": "shafaq",
-        "total_games": 8,
-        "p1_wins": 5,
-        "p2_wins": 3
+        "total_games": 2,
+        "p1_wins": 1,
+        "p2_wins": 1
+      },
+      {
+        "player1": "jmoon",
+        "player2": "will",
+        "total_games": 1,
+        "p1_wins": 1,
+        "p2_wins": 0
       }
     ],
     "win_streaks": []

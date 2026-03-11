@@ -129,15 +129,15 @@
     {
       "player1": "jmoon",
       "player2": "shafaq",
-      "p1_wins": 49,
-      "p2_wins": 13,
-      "total": 62,
-      "p1_prob": 79.0,
-      "p2_prob": 21.0,
-      "p1_american": "-376",
-      "p2_american": "+376",
-      "p1_decimal": 1.27,
-      "p2_decimal": 4.77,
+      "p1_wins": 50,
+      "p2_wins": 14,
+      "total": 64,
+      "p1_prob": 78.1,
+      "p2_prob": 21.9,
+      "p1_american": "-357",
+      "p2_american": "+357",
+      "p1_decimal": 1.28,
+      "p2_decimal": 4.57,
       "confidence": "high"
     },
     {
@@ -437,15 +437,15 @@
     {
       "player1": "jmoon",
       "player2": "will",
-      "p1_wins": 19,
+      "p1_wins": 20,
       "p2_wins": 4,
-      "total": 23,
-      "p1_prob": 82.6,
-      "p2_prob": 17.4,
-      "p1_american": "-475",
-      "p2_american": "+475",
-      "p1_decimal": 1.21,
-      "p2_decimal": 5.75,
+      "total": 24,
+      "p1_prob": 83.3,
+      "p2_prob": 16.7,
+      "p1_american": "-500",
+      "p2_american": "+500",
+      "p1_decimal": 1.2,
+      "p2_decimal": 6.0,
       "confidence": "medium"
     },
     {
@@ -1731,8 +1731,8 @@
   "power_rankings": [
     {
       "player": "jmoon",
-      "h2h_wins": 753,
-      "h2h_losses": 165,
+      "h2h_wins": 755,
+      "h2h_losses": 166,
       "h2h_rate": 82.0,
       "opponents": 14
     },
@@ -1759,8 +1759,8 @@
     },
     {
       "player": "shafaq",
-      "h2h_wins": 318,
-      "h2h_losses": 272,
+      "h2h_wins": 319,
+      "h2h_losses": 273,
       "h2h_rate": 53.9,
       "opponents": 14
     },
@@ -1781,8 +1781,8 @@
     {
       "player": "will",
       "h2h_wins": 181,
-      "h2h_losses": 202,
-      "h2h_rate": 47.3,
+      "h2h_losses": 203,
+      "h2h_rate": 47.1,
       "opponents": 11
     },
     {

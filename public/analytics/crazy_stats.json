@@ -62,8 +62,8 @@
     }
   ],
   "jmoon_deep_dive": {
-    "total_games": 1061,
-    "total_wins": 833,
+    "total_games": 1064,
+    "total_wins": 835,
     "winrate_Late Night (10PM-4AM)": {
       "games": 389,
       "win_rate": 80.7
@@ -73,8 +73,8 @@
       "win_rate": 80.0
     },
     "winrate_Afternoon (12PM-5PM)": {
-      "games": 389,
-      "win_rate": 77.9
+      "games": 392,
+      "win_rate": 77.8
     },
     "winrate_Evening (6PM-9PM)": {
       "games": 253,
@@ -86,8 +86,8 @@
         "win_rate": 81.8
       },
       "Tuesday": {
-        "games": 87,
-        "win_rate": 81.6
+        "games": 90,
+        "win_rate": 81.1
       },
       "Wednesday": {
         "games": 151,
@@ -122,8 +122,8 @@
     },
     "most_played_character": {
       "character": "JOKER",
-      "games": 285,
-      "win_rate": 81.1
+      "games": 288,
+      "win_rate": 80.9
     }
   },
   "weekend_warriors": [
@@ -475,7 +475,7 @@
     },
     {
       "player": "shafaq",
-      "kills": 15
+      "kills": 16
     },
     {
       "player": "amar",
@@ -589,9 +589,9 @@
     },
     "2026-03": {
       "player": "jmoon",
-      "games": 39,
-      "wins": 32,
-      "win_rate": 82.1
+      "games": 42,
+      "wins": 34,
+      "win_rate": 81.0
     }
   },
   "busiest_hour": {
