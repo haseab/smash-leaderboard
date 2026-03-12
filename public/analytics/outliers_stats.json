@@ -9,19 +9,19 @@
   "most_dominant": {
     "stat": "Highest Win Rate (50+ games)",
     "player": "jmoon",
-    "value": "78.5%",
-    "detail": "835W - 229L across 1064 games"
+    "value": "78.6%",
+    "detail": "844W - 230L across 1074 games"
   },
   "biggest_underdog": {
     "stat": "Lowest Win Rate (50+ games)",
     "player": "unknown",
     "value": "0.0%",
-    "detail": "Still showed up for 52 games. Respect."
+    "detail": "Still showed up for 55 games. Respect."
   },
   "worst_losing_streak": {
     "stat": "Longest Losing Streak",
     "player": "unknown",
-    "value": "52 consecutive losses",
+    "value": "55 consecutive losses",
     "detail": "Kept coming back for more. That's dedication."
   },
   "best_winning_streak": {
@@ -34,7 +34,7 @@
     "stat": "Best KO/Death Ratio",
     "player": "jmoon",
     "value": "1.62 K/D",
-    "detail": "2588 KOs, 1598 deaths"
+    "detail": "2617 KOs, 1612 deaths"
   },
   "worst_kd": {
     "stat": "Worst KO/Death Ratio",
@@ -70,7 +70,7 @@
     "stat": "Most Loyal to One Character",
     "player": "unknown",
     "value": "100.0% on UNKNOWN",
-    "detail": "Across 52 total games"
+    "detail": "Across 55 total games"
   },
   "weekend_warrior": {
     "stat": "Weekend Warrior",
@@ -93,8 +93,8 @@
   "late_night_specialist": {
     "stat": "Best After 10PM",
     "player": "jmoon",
-    "value": "78.3% win rate",
-    "detail": "Across 497 late-night games"
+    "value": "78.5% win rate",
+    "detail": "Across 507 late-night games"
   },
   "giant_killer": {
     "stat": "Most Wins vs jmoon",
@@ -106,7 +106,7 @@
     "stat": "Most Cursed Character",
     "player": "UNKNOWN",
     "value": "0.0% win rate",
-    "detail": "Across 52 games. Just don't pick it."
+    "detail": "Across 55 games. Just don't pick it."
   },
   "most_blessed_char": {
     "stat": "Most Blessed Character",
@@ -134,9 +134,9 @@
   },
   "comeback_king": {
     "stat": "Comeback King",
-    "player": "shafaq",
-    "value": "64.0% win rate with SDs",
-    "detail": "Still wins 64% of the time after self-destructing"
+    "player": "strike",
+    "value": "63.0% win rate with SDs",
+    "detail": "Still wins 62% of the time after self-destructing"
   },
   "most_improved": {
     "stat": "Most Improved Player",
@@ -165,7 +165,7 @@
   "perfect_game_master": {
     "stat": "Most Perfect Games",
     "player": "jmoon",
-    "value": "118 flawless victories",
+    "value": "119 flawless victories",
     "detail": "That's 11.1% of their games"
   },
   "single_game_kos": {

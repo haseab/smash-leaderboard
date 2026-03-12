@@ -9,8 +9,8 @@
       "plays": 165
     },
     "Wednesday": {
-      "character": "DONKEY KONG",
-      "plays": 167
+      "character": "SAMUS",
+      "plays": 181
     },
     "Thursday": {
       "character": "ZELDA",
@@ -62,8 +62,8 @@
     }
   ],
   "jmoon_deep_dive": {
-    "total_games": 1064,
-    "total_wins": 835,
+    "total_games": 1074,
+    "total_wins": 844,
     "winrate_Late Night (10PM-4AM)": {
       "games": 389,
       "win_rate": 80.7
@@ -73,8 +73,8 @@
       "win_rate": 80.0
     },
     "winrate_Afternoon (12PM-5PM)": {
-      "games": 392,
-      "win_rate": 77.8
+      "games": 402,
+      "win_rate": 78.1
     },
     "winrate_Evening (6PM-9PM)": {
       "games": 253,
@@ -90,8 +90,8 @@
         "win_rate": 81.1
       },
       "Wednesday": {
-        "games": 151,
-        "win_rate": 80.8
+        "games": 161,
+        "win_rate": 81.4
       },
       "Thursday": {
         "games": 209,
@@ -197,7 +197,7 @@
   "longest_losing_streaks": [
     {
       "player": "unknown",
-      "streak": 52
+      "streak": 55
     },
     {
       "player": "heidy",
@@ -243,24 +243,24 @@
       "sd_win_rate": 80.0
     },
     {
-      "player": "shafaq",
-      "sd_games": 50,
-      "sd_win_rate": 64.0
-    },
-    {
       "player": "strike",
       "sd_games": 27,
       "sd_win_rate": 63.0
     },
     {
-      "player": "jmoon",
-      "sd_games": 32,
-      "sd_win_rate": 59.4
+      "player": "shafaq",
+      "sd_games": 53,
+      "sd_win_rate": 62.3
     },
     {
       "player": "samin",
-      "sd_games": 27,
-      "sd_win_rate": 59.3
+      "sd_games": 28,
+      "sd_win_rate": 60.7
+    },
+    {
+      "player": "jmoon",
+      "sd_games": 33,
+      "sd_win_rate": 57.6
     }
   ],
   "top_matchup_by_day": {
@@ -288,7 +288,7 @@
   "cursed_characters": [
     {
       "character": "UNKNOWN",
-      "plays": 52,
+      "plays": 55,
       "win_rate": 0.0
     },
     {
@@ -319,6 +319,11 @@
       "win_rate": 79.3
     },
     {
+      "character": "ISABELLE",
+      "plays": 20,
+      "win_rate": 65.0
+    },
+    {
       "character": "LUIGI",
       "plays": 48,
       "win_rate": 64.6
@@ -332,11 +337,6 @@
       "character": "PIRANHA PLANT",
       "plays": 102,
       "win_rate": 57.8
-    },
-    {
-      "character": "GANONDORF",
-      "plays": 750,
-      "win_rate": 56.3
     }
   ],
   "friday_night_favorites": [
@@ -403,8 +403,8 @@
     },
     {
       "player": "nish",
-      "games": 272,
-      "win_rate": 43.4
+      "games": 276,
+      "win_rate": 43.5
     },
     {
       "player": "keneru",
@@ -475,7 +475,7 @@
     },
     {
       "player": "shafaq",
-      "kills": 16
+      "kills": 17
     },
     {
       "player": "amar",
@@ -589,9 +589,9 @@
     },
     "2026-03": {
       "player": "jmoon",
-      "games": 42,
-      "wins": 34,
-      "win_rate": 81.0
+      "games": 52,
+      "wins": 43,
+      "win_rate": 82.7
     }
   },
   "busiest_hour": {

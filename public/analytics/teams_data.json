@@ -1,10 +1,10 @@
 {
-  "total_team_matches": 962,
+  "total_team_matches": 978,
   "match_formats": {
     "1v2": 271,
-    "2v2": 348,
+    "2v2": 363,
     "2v1": 85,
-    "1v3": 83,
+    "1v3": 84,
     "3v1": 5,
     "3v2": 34,
     "1v4": 35,
@@ -15,7 +15,7 @@
     "1v5": 8,
     "4v1": 1
   },
-  "true_2v2_count": 348,
+  "true_2v2_count": 363,
   "best_duos": [
     {
       "duo": "mmmmm & own",
@@ -93,10 +93,10 @@
       "duo": "samin & shafaq",
       "player1": "samin",
       "player2": "shafaq",
-      "wins": 6,
+      "wins": 7,
       "losses": 2,
-      "total": 8,
-      "win_rate": 75.0
+      "total": 9,
+      "win_rate": 77.8
     },
     {
       "duo": "keneru & lag",
@@ -162,15 +162,6 @@
       "win_rate": 71.4
     },
     {
-      "duo": "nish & shafaq",
-      "player1": "nish",
-      "player2": "shafaq",
-      "wins": 7,
-      "losses": 3,
-      "total": 10,
-      "win_rate": 70.0
-    },
-    {
       "duo": "gapam & keneru",
       "player1": "gapam",
       "player2": "keneru",
@@ -195,6 +186,15 @@
       "wins": 12,
       "losses": 6,
       "total": 18,
+      "win_rate": 66.7
+    },
+    {
+      "duo": "fateen & pat",
+      "player1": "fateen",
+      "player2": "pat",
+      "wins": 2,
+      "losses": 1,
+      "total": 3,
       "win_rate": 66.7
     }
   ],
@@ -222,9 +222,9 @@
       "player1": "keneru",
       "player2": "nish",
       "wins": 17,
-      "losses": 12,
-      "total": 29,
-      "win_rate": 58.6
+      "losses": 13,
+      "total": 30,
+      "win_rate": 56.7
     },
     {
       "duo": "own & subby",
@@ -234,6 +234,15 @@
       "losses": 17,
       "total": 28,
       "win_rate": 39.3
+    },
+    {
+      "duo": "nish & shafaq",
+      "player1": "nish",
+      "player2": "shafaq",
+      "wins": 12,
+      "losses": 11,
+      "total": 23,
+      "win_rate": 52.2
     },
     {
       "duo": "strike & subby",
@@ -299,6 +308,15 @@
       "win_rate": 44.4
     },
     {
+      "duo": "keneru & samin",
+      "player1": "keneru",
+      "player2": "samin",
+      "wins": 11,
+      "losses": 7,
+      "total": 18,
+      "win_rate": 61.1
+    },
+    {
       "duo": "habeas & will",
       "player1": "habeas",
       "player2": "will",
@@ -360,24 +378,6 @@
       "losses": 10,
       "total": 14,
       "win_rate": 28.6
-    },
-    {
-      "duo": "habeas & shafaq",
-      "player1": "habeas",
-      "player2": "shafaq",
-      "wins": 10,
-      "losses": 4,
-      "total": 14,
-      "win_rate": 71.4
-    },
-    {
-      "duo": "keneru & shafaq",
-      "player1": "keneru",
-      "player2": "shafaq",
-      "wins": 9,
-      "losses": 4,
-      "total": 13,
-      "win_rate": 69.2
     }
   ],
   "best_teams": [
@@ -387,12 +387,12 @@
         "samin"
       ],
       "size": 1,
-      "wins": 37,
+      "wins": 38,
       "losses": 0,
-      "total": 37,
+      "total": 38,
       "win_rate": 100.0,
-      "total_kos": 154,
-      "total_falls": 61
+      "total_kos": 156,
+      "total_falls": 62
     },
     {
       "team": "own",
@@ -765,12 +765,26 @@
         "samin"
       ],
       "size": 1,
-      "wins": 37,
+      "wins": 38,
       "losses": 0,
-      "total": 37,
+      "total": 38,
       "win_rate": 100.0,
-      "total_kos": 154,
-      "total_falls": 61
+      "total_kos": 156,
+      "total_falls": 62
+    },
+    {
+      "team": "keneru & nish",
+      "members": [
+        "keneru",
+        "nish"
+      ],
+      "size": 2,
+      "wins": 22,
+      "losses": 16,
+      "total": 38,
+      "win_rate": 57.9,
+      "total_kos": 150,
+      "total_falls": 148
     },
     {
       "team": "habeas & subby",
@@ -785,20 +799,6 @@
       "win_rate": 35.1,
       "total_kos": 148,
       "total_falls": 183
-    },
-    {
-      "team": "keneru & nish",
-      "members": [
-        "keneru",
-        "nish"
-      ],
-      "size": 2,
-      "wins": 22,
-      "losses": 15,
-      "total": 37,
-      "win_rate": 59.5,
-      "total_kos": 150,
-      "total_falls": 146
     },
     {
       "team": "own & subby",
@@ -972,11 +972,11 @@
     },
     {
       "player": "shafaq",
-      "team_wins": 117,
-      "team_losses": 82,
-      "team_games": 199,
-      "team_win_rate": 58.8,
-      "best_teammate": "habeas",
+      "team_wins": 123,
+      "team_losses": 91,
+      "team_games": 214,
+      "team_win_rate": 57.5,
+      "best_teammate": "nish",
       "games_with_best": 30
     },
     {
@@ -1007,6 +1007,15 @@
       "games_with_best": 8
     },
     {
+      "player": "samin",
+      "team_wins": 84,
+      "team_losses": 77,
+      "team_games": 161,
+      "team_win_rate": 52.2,
+      "best_teammate": "keneru",
+      "games_with_best": 43
+    },
+    {
       "player": "audrey",
       "team_wins": 12,
       "team_losses": 11,
@@ -1017,12 +1026,12 @@
     },
     {
       "player": "keneru",
-      "team_wins": 171,
-      "team_losses": 163,
-      "team_games": 334,
-      "team_win_rate": 51.2,
-      "best_teammate": "subby",
-      "games_with_best": 62
+      "team_wins": 180,
+      "team_losses": 168,
+      "team_games": 348,
+      "team_win_rate": 51.7,
+      "best_teammate": "nish",
+      "games_with_best": 63
     },
     {
       "player": "ryy",
@@ -1032,15 +1041,6 @@
       "team_win_rate": 50.8,
       "best_teammate": "will",
       "games_with_best": 60
-    },
-    {
-      "player": "samin",
-      "team_wins": 73,
-      "team_losses": 72,
-      "team_games": 145,
-      "team_win_rate": 50.3,
-      "best_teammate": "subby",
-      "games_with_best": 40
     },
     {
       "player": "will",
@@ -1089,10 +1089,10 @@
     },
     {
       "player": "nish",
-      "team_wins": 164,
-      "team_losses": 213,
-      "team_games": 377,
-      "team_win_rate": 43.5,
+      "team_wins": 169,
+      "team_losses": 223,
+      "team_games": 392,
+      "team_win_rate": 43.1,
       "best_teammate": "subby",
       "games_with_best": 68
     },
@@ -1351,8 +1351,8 @@
     {
       "player": "unknown",
       "team_wins": 0,
-      "team_losses": 28,
-      "team_games": 28,
+      "team_losses": 31,
+      "team_games": 31,
       "team_win_rate": 0.0,
       "best_teammate": "keneru",
       "games_with_best": 3
@@ -1468,6 +1468,14 @@
       "win_rate": 83.3
     },
     {
+      "partnership": "samin & shafaq",
+      "player1": "samin",
+      "player2": "shafaq",
+      "games_together": 10,
+      "wins_together": 8,
+      "win_rate": 80.0
+    },
+    {
       "partnership": "mizan & shafaq",
       "player1": "mizan",
       "player2": "shafaq",
@@ -1490,14 +1498,6 @@
       "games_together": 5,
       "wins_together": 4,
       "win_rate": 80.0
-    },
-    {
-      "partnership": "samin & shafaq",
-      "player1": "samin",
-      "player2": "shafaq",
-      "games_together": 9,
-      "wins_together": 7,
-      "win_rate": 77.8
     },
     {
       "partnership": "jean & shafaq",
@@ -1582,20 +1582,20 @@
       "win_rate": 43.1
     },
     {
+      "partnership": "keneru & nish",
+      "player1": "keneru",
+      "player2": "nish",
+      "games_together": 63,
+      "wins_together": 30,
+      "win_rate": 47.6
+    },
+    {
       "partnership": "keneru & subby",
       "player1": "keneru",
       "player2": "subby",
       "games_together": 62,
       "wins_together": 25,
       "win_rate": 40.3
-    },
-    {
-      "partnership": "keneru & nish",
-      "player1": "keneru",
-      "player2": "nish",
-      "games_together": 62,
-      "wins_together": 30,
-      "win_rate": 48.4
     },
     {
       "partnership": "ryy & will",
@@ -1636,6 +1636,14 @@
       "games_together": 47,
       "wins_together": 23,
       "win_rate": 48.9
+    },
+    {
+      "partnership": "keneru & samin",
+      "player1": "keneru",
+      "player2": "samin",
+      "games_together": 43,
+      "wins_together": 20,
+      "win_rate": 46.5
     },
     {
       "partnership": "habeas & keneru",
@@ -1686,12 +1694,12 @@
       "win_rate": 50.0
     },
     {
-      "partnership": "keneru & samin",
-      "player1": "keneru",
-      "player2": "samin",
+      "partnership": "nish & shafaq",
+      "player1": "nish",
+      "player2": "shafaq",
       "games_together": 30,
-      "wins_together": 11,
-      "win_rate": 36.7
+      "wins_together": 16,
+      "win_rate": 53.3
     },
     {
       "partnership": "habeas & shafaq",
@@ -1708,21 +1716,13 @@
       "games_together": 26,
       "wins_together": 6,
       "win_rate": 23.1
-    },
-    {
-      "partnership": "fateen & strike",
-      "player1": "fateen",
-      "player2": "strike",
-      "games_together": 25,
-      "wins_together": 12,
-      "win_rate": 48.0
     }
   ],
   "summary": {
-    "total_team_matches": 962,
-    "true_2v2_matches": 348,
-    "total_unique_teams": 326,
-    "total_unique_duos": 93,
-    "total_partnerships": 280
+    "total_team_matches": 978,
+    "true_2v2_matches": 363,
+    "total_unique_teams": 329,
+    "total_unique_duos": 95,
+    "total_partnerships": 283
   }
 }
