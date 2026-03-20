@@ -1,6 +1,14 @@
 {
   "reports": [
     {
+      "date": "March 19, 2026",
+      "generated_at": "2026-03-20T16:17:36.501146",
+      "headline": "REST DAY AT THE ARENA",
+      "report": "No matches were recorded on March 19, 2026. The arena was quiet as competitors took a well-deserved break. Will we see explosive action tomorrow? Stay tuned!",
+      "highlights": [],
+      "stats_summary": null
+    },
+    {
       "date": "March 18, 2026",
       "generated_at": "2026-03-19T16:22:51.799843",
       "headline": "REST DAY AT THE ARENA",
@@ -3329,89 +3337,6 @@
       "report": "No matches were recorded on January 19, 2026. The arena was quiet as competitors took a well-deserved break. Will we see explosive action tomorrow? Stay tuned!",
       "highlights": [],
       "stats_summary": null
-    },
-    {
-      "date": "January 18, 2026",
-      "generated_at": "2026-01-21T05:56:13.184137",
-      "headline": "ACTION AT THE ARENA: 11 MATCHES!",
-      "report": "We saw 11 matches with 42 total KOs on January 18, 2026.",
-      "player_of_the_day": {
-        "name": "jmoon",
-        "reason": "Most active"
-      },
-      "highlights": [
-        "11 matches played"
-      ],
-      "stats_summary": {
-        "total_matches": 11,
-        "total_kos": 42,
-        "player_stats": [
-          {
-            "name": "jmoon",
-            "games": 11,
-            "wins": 11,
-            "losses": 0,
-            "win_rate": 100.0,
-            "kos": 24,
-            "falls": 18,
-            "sds": 0,
-            "kd_ratio": 1.33,
-            "main_character": "INCINEROAR",
-            "character_games": 6
-          },
-          {
-            "name": "amar",
-            "games": 11,
-            "wins": 0,
-            "losses": 11,
-            "win_rate": 0.0,
-            "kos": 18,
-            "falls": 24,
-            "sds": 0,
-            "kd_ratio": 0.75,
-            "main_character": "ENDERMAN",
-            "character_games": 11
-          }
-        ],
-        "top_characters": [
-          {
-            "character": "ENDERMAN",
-            "times_played": 11
-          },
-          {
-            "character": "INCINEROAR",
-            "times_played": 6
-          },
-          {
-            "character": "JOKER",
-            "times_played": 3
-          },
-          {
-            "character": "CAPTAIN FALCON",
-            "times_played": 1
-          },
-          {
-            "character": "PALUTENA",
-            "times_played": 1
-          }
-        ],
-        "perfect_games": [],
-        "rivalries": [
-          {
-            "player1": "jmoon",
-            "player2": "amar",
-            "total_games": 11,
-            "p1_wins": 11,
-            "p2_wins": 0
-          }
-        ],
-        "win_streaks": [
-          {
-            "player": "jmoon",
-            "streak": 11
-          }
-        ]
-      }
     }
   ]
 }
