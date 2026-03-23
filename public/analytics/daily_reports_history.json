@@ -1,6 +1,14 @@
 {
   "reports": [
     {
+      "date": "March 22, 2026",
+      "generated_at": "2026-03-23T16:56:35.682606",
+      "headline": "REST DAY AT THE ARENA",
+      "report": "No matches were recorded on March 22, 2026. The arena was quiet as competitors took a well-deserved break. Will we see explosive action tomorrow? Stay tuned!",
+      "highlights": [],
+      "stats_summary": null
+    },
+    {
       "date": "March 21, 2026",
       "generated_at": "2026-03-22T16:31:00.131467",
       "headline": "REST DAY AT THE ARENA",
@@ -3162,178 +3170,6 @@
           {
             "player": "nish",
             "streak": 7
-          }
-        ]
-      }
-    },
-    {
-      "date": "January 21, 2026",
-      "generated_at": "2026-01-23T06:46:38.506564",
-      "headline": "ACTION-PACKED DAY: 14 MATCHES, 75 KOS!",
-      "report": "What a day at the Smash Arena! We witnessed 14 intense matches with a combined 75 knockouts.\n\njean was the workhorse of the day, grinding through 11 matches with 3 victories.\n\nThe hottest player was shafaq who maintained an impressive 80.0% win rate.\n\nWe even saw perfection today - ben delivered a flawless 3-0 with DONKEY KONG!\n\nThe arena awaits more battles tomorrow. Who will rise to the top?",
-      "player_of_the_day": {
-        "name": "jean",
-        "reason": "Most active player with 11 games"
-      },
-      "highlights": [
-        "14 total matches played",
-        "jean most active with 11 games",
-        "3 perfect game(s) achieved"
-      ],
-      "stats_summary": {
-        "total_matches": 14,
-        "total_kos": 75,
-        "player_stats": [
-          {
-            "name": "jean",
-            "games": 11,
-            "wins": 3,
-            "losses": 8,
-            "win_rate": 27.3,
-            "kos": 19,
-            "falls": 31,
-            "sds": 1,
-            "kd_ratio": 0.61,
-            "main_character": "CAPTAIN FALCON",
-            "character_games": 5
-          },
-          {
-            "name": "shafaq",
-            "games": 10,
-            "wins": 8,
-            "losses": 2,
-            "win_rate": 80.0,
-            "kos": 34,
-            "falls": 16,
-            "sds": 3,
-            "kd_ratio": 2.12,
-            "main_character": "ZELDA",
-            "character_games": 4
-          },
-          {
-            "name": "keneru",
-            "games": 6,
-            "wins": 2,
-            "losses": 4,
-            "win_rate": 33.3,
-            "kos": 10,
-            "falls": 15,
-            "sds": 5,
-            "kd_ratio": 0.67,
-            "main_character": "DONKEY KONG",
-            "character_games": 5
-          },
-          {
-            "name": "nish",
-            "games": 6,
-            "wins": 4,
-            "losses": 2,
-            "win_rate": 66.7,
-            "kos": 3,
-            "falls": 12,
-            "sds": 1,
-            "kd_ratio": 0.25,
-            "main_character": "KIRBY",
-            "character_games": 5
-          },
-          {
-            "name": "ben",
-            "games": 4,
-            "wins": 3,
-            "losses": 1,
-            "win_rate": 75.0,
-            "kos": 8,
-            "falls": 3,
-            "sds": 0,
-            "kd_ratio": 2.67,
-            "main_character": "DONKEY KONG",
-            "character_games": 3
-          },
-          {
-            "name": "oh",
-            "games": 3,
-            "wins": 0,
-            "losses": 3,
-            "win_rate": 0.0,
-            "kos": 1,
-            "falls": 6,
-            "sds": 0,
-            "kd_ratio": 0.17,
-            "main_character": "WARIO",
-            "character_games": 2
-          }
-        ],
-        "top_characters": [
-          {
-            "character": "DONKEY KONG",
-            "times_played": 8
-          },
-          {
-            "character": "CAPTAIN FALCON",
-            "times_played": 5
-          },
-          {
-            "character": "KIRBY",
-            "times_played": 5
-          },
-          {
-            "character": "ZELDA",
-            "times_played": 4
-          },
-          {
-            "character": "SEPHIROTH",
-            "times_played": 3
-          }
-        ],
-        "perfect_games": [
-          {
-            "player": "ben",
-            "character": "DONKEY KONG"
-          },
-          {
-            "player": "shafaq",
-            "character": "ZELDA"
-          },
-          {
-            "player": "ben",
-            "character": "DONKEY KONG"
-          }
-        ],
-        "rivalries": [
-          {
-            "player1": "shafaq",
-            "player2": "jean",
-            "total_games": 4,
-            "p1_wins": 4,
-            "p2_wins": 0
-          },
-          {
-            "player1": "ben",
-            "player2": "oh",
-            "total_games": 3,
-            "p1_wins": 3,
-            "p2_wins": 0
-          },
-          {
-            "player1": "jean",
-            "player2": "ben",
-            "total_games": 1,
-            "p1_wins": 1,
-            "p2_wins": 0
-          }
-        ],
-        "win_streaks": [
-          {
-            "player": "shafaq",
-            "streak": 4
-          },
-          {
-            "player": "nish",
-            "streak": 3
-          },
-          {
-            "player": "ben",
-            "streak": 3
           }
         ]
       }
