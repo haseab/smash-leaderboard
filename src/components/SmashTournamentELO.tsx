@@ -1690,25 +1690,24 @@ export default function SmashTournamentELO({
                         {/* Glare effect */}
                         <div className="absolute inset-0 bg-gradient-to-br from-white to-transparent opacity-10 skew-x-12 transform -translate-x-full"></div>
 
-                        <div className="text-center relative z-10">
-                          <h2
-                            className="text-2xl font-bold text-white uppercase tracking-wider"
-                            style={{
-                              textShadow: "0 0 10px rgba(0, 0, 0, 0.5)",
-                            }}
-                          >
-                            Official Tier List
-                          </h2>
-                          <RefreshStatus
-                            refreshing={refreshing}
-                            countdown={countdown}
-                            lastUpdated={lastUpdated}
-                            centered={true}
-                          />
-                          <HardRefreshButton
-                            onRefresh={handleHardRefresh}
-                            centered={true}
-                          />
+                        <div className="relative z-10 flex items-center justify-center gap-4">
+                          <div className="text-center">
+                            <h2
+                              className="text-2xl font-bold text-white uppercase tracking-wider"
+                              style={{
+                                textShadow: "0 0 10px rgba(0, 0, 0, 0.5)",
+                              }}
+                            >
+                              Official Tier List
+                            </h2>
+                            <RefreshStatus
+                              refreshing={refreshing}
+                              countdown={countdown}
+                              lastUpdated={lastUpdated}
+                              centered={true}
+                            />
+                          </div>
+                          <HardRefreshButton onRefresh={handleHardRefresh} />
                         </div>
                       </div>
 
