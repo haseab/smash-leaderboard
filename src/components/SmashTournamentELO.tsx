@@ -126,13 +126,13 @@ const HardRefreshButton = memo(
   }) => (
     <button
       onClick={onRefresh}
-      className={`inline-flex items-center gap-2 rounded-lg border border-gray-500 bg-gray-800 px-3 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-gray-700 ${
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-500 bg-gray-800 text-white transition-colors duration-200 hover:bg-gray-700 ${
         centered ? "mt-3" : ""
       }`}
-      title="Hard refresh the page"
+      title="Refresh page"
+      aria-label="Refresh page"
     >
       <RefreshCw size={16} />
-      <span>Hard Refresh</span>
     </button>
   )
 );
