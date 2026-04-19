@@ -51,13 +51,8 @@ def normalize_app_url(value):
         return value
 
     site_url = get_site_url()
-
-    if value.startswith("/"):
-        return urljoin(f"{site_url}/", value.lstrip("/")) if site_url else value
-
     if not value.startswith(("http://", "https://")):
-        normalized_path = f"/{value.lstrip('/')}"
-        return urljoin(f"{site_url}/", value.lstrip("/")) if site_url else normalized_path
+        return value
 
     parsed = urlparse(value)
     if site_url and parsed.netloc in LEGACY_APP_HOSTS:

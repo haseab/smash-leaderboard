@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Filter,
   List,
+  RefreshCw,
   Swords,
   Trophy,
   Users,
@@ -114,6 +115,29 @@ const RefreshStatus = memo(
 );
 
 RefreshStatus.displayName = "RefreshStatus";
+
+const HardRefreshButton = memo(
+  ({
+    onRefresh,
+    centered = false,
+  }: {
+    onRefresh: () => void;
+    centered?: boolean;
+  }) => (
+    <button
+      onClick={onRefresh}
+      className={`inline-flex items-center gap-2 rounded-lg border border-gray-500 bg-gray-800 px-3 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-gray-700 ${
+        centered ? "mt-3" : ""
+      }`}
+      title="Hard refresh the page"
+    >
+      <RefreshCw size={16} />
+      <span>Hard Refresh</span>
+    </button>
+  )
+);
+
+HardRefreshButton.displayName = "HardRefreshButton";
 
 // ProfilePicture component with zoom and translate effects
 const ProfilePicture = memo(
@@ -479,6 +503,16 @@ export default function SmashTournamentELO({
   // Function to handle player click and scroll
   const handlePlayerClick = (playerId: number) => {
     router.push(`/players#player-${playerId}`);
+  };
+
+  const handleHardRefresh = () => {
+    try {
+      localStorage.removeItem("playersCache");
+    } catch {
+      // Ignore storage failures and still reload the page.
+    }
+
+    window.location.reload();
   };
 
   // Function to add highlight effect to player profile after scrolling
@@ -1207,12 +1241,15 @@ export default function SmashTournamentELO({
                           </h2>
                         </div>
                       </div>
-                      <RefreshStatus
-                        refreshing={refreshing}
-                        countdown={countdown}
-                        lastUpdated={lastUpdated}
-                        centered={false}
-                      />
+                      <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
+                        <RefreshStatus
+                          refreshing={refreshing}
+                          countdown={countdown}
+                          lastUpdated={lastUpdated}
+                          centered={false}
+                        />
+                        <HardRefreshButton onRefresh={handleHardRefresh} />
+                      </div>
                     </div>
                   </div>
 
@@ -1668,6 +1705,10 @@ export default function SmashTournamentELO({
                             lastUpdated={lastUpdated}
                             centered={true}
                           />
+                          <HardRefreshButton
+                            onRefresh={handleHardRefresh}
+                            centered={true}
+                          />
                         </div>
                       </div>
 
@@ -1866,13 +1907,16 @@ export default function SmashTournamentELO({
                               </button>
                             </div>
                           </div>
-                          <RefreshStatus
-                            refreshing={refreshing}
-                            countdown={countdown}
-                            lastUpdated={lastUpdated}
-                            centered={false}
-                            autoRefreshDisabled={autoRefreshDisabled}
-                          />
+                          <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
+                            <RefreshStatus
+                              refreshing={refreshing}
+                              countdown={countdown}
+                              lastUpdated={lastUpdated}
+                              centered={false}
+                              autoRefreshDisabled={autoRefreshDisabled}
+                            />
+                            <HardRefreshButton onRefresh={handleHardRefresh} />
+                          </div>
                         </div>
                       </div>
 
@@ -2348,12 +2392,15 @@ export default function SmashTournamentELO({
                               </h2>
                             </div>
                           </div>
-                          <RefreshStatus
-                            refreshing={refreshing}
-                            countdown={countdown}
-                            lastUpdated={lastUpdated}
-                            centered={false}
-                          />
+                          <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
+                            <RefreshStatus
+                              refreshing={refreshing}
+                              countdown={countdown}
+                              lastUpdated={lastUpdated}
+                              centered={false}
+                            />
+                            <HardRefreshButton onRefresh={handleHardRefresh} />
+                          </div>
                         </div>
                       </div>
 

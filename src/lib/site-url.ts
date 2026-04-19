@@ -28,14 +28,8 @@ export function normalizeAppUrl(url: string | null | undefined): string | null {
   }
 
   const siteUrl = getSiteUrl();
-
-  if (url.startsWith("/")) {
-    return siteUrl ? new URL(url, siteUrl).toString() : url;
-  }
-
   if (!/^https?:\/\//i.test(url)) {
-    const normalizedPath = `/${url.replace(/^\/+/, "")}`;
-    return siteUrl ? new URL(normalizedPath, siteUrl).toString() : normalizedPath;
+    return url;
   }
 
   try {
