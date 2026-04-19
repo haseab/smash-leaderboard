@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizeAppUrl } from "@/lib/site-url";
 import { unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
 
@@ -170,7 +171,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     is_ranked: player.is_ranked,
     top_ten_played: player.top_ten_played,
     country: player.country,
-    picture: player.picture,
+    picture: normalizeAppUrl(player.picture),
     main_character: player.main_character,
     total_wins: Number(player.total_wins),
     total_losses: Number(player.total_losses),
