@@ -11,11 +11,15 @@ function trimTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-export function getSiteUrl(): string {
+export function getSiteUrl(): string | null {
   const configuredUrl =
     process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.SITE_URL?.trim();
 
-  return trimTrailingSlash(ensureProtocol(configuredUrl || "http://localhost:3000"));
+  if (!configuredUrl) {
+    return null;
+  }
+
+  return trimTrailingSlash(ensureProtocol(configuredUrl));
 }
 
 export function normalizeAppUrl(url: string | null | undefined): string | null {
@@ -26,16 +30,17 @@ export function normalizeAppUrl(url: string | null | undefined): string | null {
   const siteUrl = getSiteUrl();
 
   if (url.startsWith("/")) {
-    return new URL(url, siteUrl).toString();
+    return siteUrl ? new URL(url, siteUrl).toString() : url;
   }
 
   if (!/^https?:\/\//i.test(url)) {
-    return new URL(`/${url.replace(/^\/+/, "")}`, siteUrl).toString();
+    const normalizedPath = `/${url.replace(/^\/+/, "")}`;
+    return siteUrl ? new URL(normalizedPath, siteUrl).toString() : normalizedPath;
   }
 
   try {
     const parsedUrl = new URL(url);
-    if (LEGACY_APP_HOSTS.has(parsedUrl.hostname)) {
+    if (siteUrl && LEGACY_APP_HOSTS.has(parsedUrl.hostname)) {
       return new URL(
         `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`,
         siteUrl

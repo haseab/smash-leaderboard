@@ -34,11 +34,11 @@ def load_root_env():
 
 
 def get_site_url():
-    configured = (
-        os.environ.get("NEXT_PUBLIC_SITE_URL")
-        or os.environ.get("SITE_URL")
-        or "http://localhost:3000"
-    ).strip()
+    configured = os.environ.get("NEXT_PUBLIC_SITE_URL") or os.environ.get("SITE_URL")
+    if not configured:
+        return None
+
+    configured = configured.strip()
 
     if "://" not in configured:
         configured = f"https://{configured}"
@@ -53,13 +53,14 @@ def normalize_app_url(value):
     site_url = get_site_url()
 
     if value.startswith("/"):
-        return urljoin(f"{site_url}/", value.lstrip("/"))
+        return urljoin(f"{site_url}/", value.lstrip("/")) if site_url else value
 
     if not value.startswith(("http://", "https://")):
-        return urljoin(f"{site_url}/", value.lstrip("/"))
+        normalized_path = f"/{value.lstrip('/')}"
+        return urljoin(f"{site_url}/", value.lstrip("/")) if site_url else normalized_path
 
     parsed = urlparse(value)
-    if parsed.netloc in LEGACY_APP_HOSTS:
+    if site_url and parsed.netloc in LEGACY_APP_HOSTS:
         path = parsed.path or "/"
         normalized = urljoin(f"{site_url}/", path.lstrip("/"))
         if parsed.query:
