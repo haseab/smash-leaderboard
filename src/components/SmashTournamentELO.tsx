@@ -422,6 +422,9 @@ export default function SmashTournamentELO({
   const [refreshingMatches, setRefreshingMatches] = useState<Set<number>>(
     new Set()
   );
+  const [banningPlayerIds, setBanningPlayerIds] = useState<Set<number>>(
+    new Set()
+  );
 
   // Helper function to validate country code
   const isValidCountryCode = (countryCode: string | null): boolean => {
@@ -798,6 +801,86 @@ export default function SmashTournamentELO({
         setRefreshing(false);
       }
     }
+  };
+
+  const clearPlayersCache = () => {
+    setPlayersCache(null);
+    try {
+      localStorage.removeItem("playersCache");
+    } catch {
+      // Ignore localStorage failures and continue with in-memory state.
+    }
+  };
+
+  const handleBanPlayer = async (player: ExtendedPlayer) => {
+    const playerLabel =
+      player.display_name || player.name || `Player ${player.id}`;
+    const confirmed = window.confirm(
+      `Ban ${playerLabel}? This hides the player and any match history involving them.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setBanningPlayerIds((prev) => new Set(prev).add(player.id));
+
+    try {
+      const response = await fetch(`/api/players/${player.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ banned: true }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error || "Failed to ban player");
+      }
+
+      clearPlayersCache();
+      await fetchPlayers(true);
+    } catch (err) {
+      console.error("Error banning player:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to ban player. Please try again later."
+      );
+    } finally {
+      setBanningPlayerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(player.id);
+        return next;
+      });
+    }
+  };
+
+  const renderBanButton = (player: ExtendedPlayer) => {
+    const isBanning = banningPlayerIds.has(player.id);
+
+    return (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void handleBanPlayer(player);
+        }}
+        disabled={isBanning}
+        className={`inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition-colors md:text-sm ${
+          isBanning
+            ? "cursor-not-allowed bg-gray-700 text-gray-300"
+            : "bg-red-600 text-white hover:bg-red-700"
+        }`}
+      >
+        <X size={14} />
+        <span>{isBanning ? "Banning..." : "Ban"}</span>
+      </button>
+    );
   };
 
   const fetchMatches = async (
@@ -1330,6 +1413,9 @@ export default function SmashTournamentELO({
                               <th className="px-2 py-3 md:px-4 md:py-6 text-left text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider">
                                 Player
                               </th>
+                              <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-24">
+                                Action
+                              </th>
                               {leaderboardTab !== "unranked" && (
                                 <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-16">
                                   <div className="flex items-center justify-center">
@@ -1463,6 +1549,9 @@ export default function SmashTournamentELO({
                                       </div>
                                     </div>
                                   </td>
+                                  <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
+                                    {renderBanButton(player)}
+                                  </td>
                                   {leaderboardTab !== "unranked" && (
                                     <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
                                       <span
@@ -1549,6 +1638,9 @@ export default function SmashTournamentELO({
                                 <th className="px-2 py-3 md:px-4 md:py-6 text-left text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider">
                                   Player
                                 </th>
+                                <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-24">
+                                  Action
+                                </th>
                                 <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-16">
                                   <div className="flex items-center justify-center">
                                     <span>ELO</span>
@@ -1629,6 +1721,9 @@ export default function SmashTournamentELO({
                                             />
                                           </div>
                                         </div>
+                                      </td>
+                                      <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
+                                        {renderBanButton(player)}
                                       </td>
                                       <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
                                         <span

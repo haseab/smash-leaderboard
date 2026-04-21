@@ -18,6 +18,16 @@ export async function GET(
       where: {
         id: BigInt(matchId),
         archived: false,
+        match_participants: {
+          none: {
+            is_cpu: false,
+            players: {
+              is: {
+                banned: true,
+              },
+            },
+          },
+        },
       },
       include: {
         match_participants: {

@@ -16,6 +16,7 @@ export interface Player {
   display_name: string | null;
   elo: bigint;
   top_ten_played: number;
+  banned?: boolean;
   inactive: boolean;
   country?: string | null;
   picture?: string | null;
@@ -47,6 +48,16 @@ export async function getMostCommonCharacter(
         player: playerId,
         match: {
           archived: false,
+          match_participants: {
+            none: {
+              is_cpu: false,
+              players: {
+                is: {
+                  banned: true,
+                },
+              },
+            },
+          },
         },
       },
       select: {
@@ -87,6 +98,14 @@ export async function getPlayerStats(playerId: bigint): Promise<PlayerStats> {
         some: {
           player: playerId,
           is_cpu: false,
+        },
+        none: {
+          is_cpu: false,
+          players: {
+            is: {
+              banned: true,
+            },
+          },
         },
       },
     },

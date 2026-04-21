@@ -21,6 +21,18 @@ export async function GET(request: Request) {
     // Build Prisma where conditions - all filtering at database level
     const whereConditions: Prisma.matchesWhereInput[] = [
       { archived: false }, // Always exclude archived matches
+      {
+        match_participants: {
+          none: {
+            is_cpu: false,
+            players: {
+              is: {
+                banned: true,
+              },
+            },
+          },
+        },
+      },
     ];
 
     // Handle 1v1 filter: exactly 2 non-CPU participants
@@ -50,6 +62,14 @@ export async function GET(request: Request) {
           SELECT m.id
           FROM matches m
           WHERE m.archived = false
+          AND NOT EXISTS (
+            SELECT 1
+            FROM match_participants mp_hidden
+            JOIN players p_hidden ON p_hidden.id = mp_hidden.player
+            WHERE mp_hidden.match_id = m.id
+              AND mp_hidden.is_cpu = false
+              AND p_hidden.banned = true
+          )
           AND ${existsConditions}
           AND (
             SELECT COUNT(*) FROM match_participants mp_count
@@ -76,6 +96,14 @@ export async function GET(request: Request) {
           SELECT m.id
           FROM matches m
           WHERE m.archived = false
+          AND NOT EXISTS (
+            SELECT 1
+            FROM match_participants mp_hidden
+            JOIN players p_hidden ON p_hidden.id = mp_hidden.player
+            WHERE mp_hidden.match_id = m.id
+              AND mp_hidden.is_cpu = false
+              AND p_hidden.banned = true
+          )
           AND (
             SELECT COUNT(*) FROM match_participants mp_count
             WHERE mp_count.match_id = m.id AND mp_count.is_cpu = false

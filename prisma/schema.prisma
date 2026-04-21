@@ -18,6 +18,7 @@ model players {
   elo                   BigInt   @default(1200)
   country               String?
   picture               String?
+  banned                Boolean  @default(false)
   inactive              Boolean  @default(false)
   top_ten_played        Int      @default(0)
   

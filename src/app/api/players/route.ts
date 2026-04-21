@@ -48,13 +48,30 @@ interface TransformedPlayer {
 async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
   const query = `
   WITH
-  -- Get 1v1 matches only (exactly 2 non-CPU participants) and exclude archived matches
-  one_v_one_matches AS (
-    SELECT DISTINCT m.id as match_id
+  -- Matches that are visible in the app (exclude archived and any match with a banned human player)
+  visible_matches AS (
+    SELECT
+      m.id,
+      m.created_at
     FROM matches m
-    JOIN match_participants mp ON m.id = mp.match_id
-    WHERE mp.is_cpu = false AND m.archived = false
-    GROUP BY m.id
+    WHERE m.archived = false
+      AND NOT EXISTS (
+        SELECT 1
+        FROM match_participants mp_hidden
+        JOIN players p_hidden ON p_hidden.id = mp_hidden.player
+        WHERE mp_hidden.match_id = m.id
+          AND mp_hidden.is_cpu = false
+          AND p_hidden.banned = true
+      )
+  ),
+
+  -- Get 1v1 matches only (exactly 2 non-CPU participants)
+  one_v_one_matches AS (
+    SELECT vm.id as match_id
+    FROM visible_matches vm
+    JOIN match_participants mp ON vm.id = mp.match_id
+    WHERE mp.is_cpu = false
+    GROUP BY vm.id
     HAVING COUNT(*) = 2
   ),
 
@@ -95,7 +112,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
       ROW_NUMBER() OVER (PARTITION BY mp.player ORDER BY m.created_at DESC, m.id DESC) as match_order
     FROM match_participants mp
     JOIN one_v_one_matches ovm ON mp.match_id = ovm.match_id
-    JOIN matches m ON mp.match_id = m.id
+    JOIN visible_matches m ON mp.match_id = m.id
     WHERE mp.is_cpu = false
   ),
   -- Find the first loss for each player
@@ -125,8 +142,8 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
       mp.player,
       MAX(m.created_at) as last_match_date
     FROM match_participants mp
-    JOIN matches m ON mp.match_id = m.id
-    WHERE mp.is_cpu = false AND m.archived = false
+    JOIN visible_matches m ON mp.match_id = m.id
+    WHERE mp.is_cpu = false
     GROUP BY mp.player
   )
 
@@ -155,6 +172,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
   LEFT JOIN player_stats ps ON p.id = ps.player
   LEFT JOIN win_streaks ws ON p.id = ws.player
   LEFT JOIN last_match_dates lmd ON p.id = lmd.player
+  WHERE p.banned = false
   ORDER BY p.elo DESC;
   `;
 
