@@ -84,6 +84,7 @@ interface MatchesApiResponse {
 }
 
 type Tier = "S" | "A" | "B" | "C" | "D" | "E";
+type CacheTag = "players" | "matches";
 
 const MATCHES_PAGE_SIZE = 20;
 const MATCH_CONTEXT_PAGE_SIZE = 2;
@@ -140,17 +141,21 @@ const HardRefreshButton = memo(
   ({
     onRefresh,
     centered = false,
+    disabled = false,
   }: {
-    onRefresh: () => void;
+    onRefresh: () => void | Promise<void>;
     centered?: boolean;
+    disabled?: boolean;
   }) => (
     <button
       onClick={onRefresh}
-      className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-500 bg-gray-800 text-white transition-colors duration-200 hover:bg-gray-700 ${
+      type="button"
+      disabled={disabled}
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-500 bg-gray-800 text-white transition-colors duration-200 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 ${
         centered ? "mt-3" : ""
       }`}
-      title="Refresh page"
-      aria-label="Refresh page"
+      title="Hard refresh data"
+      aria-label="Hard refresh data"
     >
       <RefreshCw size={16} />
     </button>
@@ -414,6 +419,7 @@ export default function SmashTournamentELO({
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [hardRefreshing, setHardRefreshing] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number>(30);
 
   // Cache management
@@ -535,14 +541,94 @@ export default function SmashTournamentELO({
     router.push(`/players#player-${playerId}`);
   };
 
-  const handleHardRefresh = () => {
+  const isRefreshing = refreshing || hardRefreshing;
+
+  const clearPlayersCache = () => {
+    setPlayersCache(null);
     try {
       localStorage.removeItem("playersCache");
     } catch {
-      // Ignore storage failures and still reload the page.
+      // Ignore localStorage failures and continue with in-memory state.
+    }
+  };
+
+  const revalidateCache = async (tags: CacheTag[]) => {
+    const response = await fetch("/api/revalidate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ tags }),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(data?.error || "Failed to revalidate cached data");
+    }
+  };
+
+  const handleHardRefresh = async () => {
+    if (hardRefreshing) {
+      return;
     }
 
-    window.location.reload();
+    clearPlayersCache();
+    setError(null);
+    setCountdown(30);
+    setHardRefreshing(true);
+
+    try {
+      await revalidateCache(["players"]);
+      await fetchPlayers(true, true);
+
+      if (defaultTab !== "matches") {
+        return;
+      }
+
+      const players = searchParams.getAll("player");
+      const characters = searchParams.getAll("character");
+      const only1v1Param = searchParams.get("only1v1") === "true";
+      const matchIdParam = (searchParams.get("matchId") || "").replace(
+        /\D/g,
+        ""
+      );
+
+      if (matchIdParam) {
+        await fetchMatchContext(
+          matchIdParam,
+          players,
+          characters,
+          only1v1Param,
+          {
+            isBackgroundRefresh: true,
+            bypassBrowserCache: true,
+          }
+        );
+      } else {
+        await fetchMatches(
+          1,
+          false,
+          players,
+          characters,
+          only1v1Param,
+          true,
+          true
+        );
+        setMatchesPage(1);
+      }
+    } catch (err) {
+      console.error("Error hard refreshing data:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to hard refresh data. Please try again."
+      );
+    } finally {
+      setHardRefreshing(false);
+    }
   };
 
   // Function to add highlight effect to player profile after scrolling
@@ -764,7 +850,10 @@ export default function SmashTournamentELO({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultTab, searchParams]);
 
-  const fetchPlayers = async (isBackgroundRefresh = false) => {
+  const fetchPlayers = async (
+    isBackgroundRefresh = false,
+    bypassBrowserCache = false
+  ) => {
     if (!isBackgroundRefresh) {
       setLoading(true);
     } else {
@@ -773,7 +862,9 @@ export default function SmashTournamentELO({
     setError(null);
 
     try {
-      const response = await fetch("/api/players");
+      const response = await fetch("/api/players", {
+        cache: bypassBrowserCache ? "no-store" : "default",
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch players");
       }
@@ -843,15 +934,6 @@ export default function SmashTournamentELO({
       } else {
         setRefreshing(false);
       }
-    }
-  };
-
-  const clearPlayersCache = () => {
-    setPlayersCache(null);
-    try {
-      localStorage.removeItem("playersCache");
-    } catch {
-      // Ignore localStorage failures and continue with in-memory state.
     }
   };
 
@@ -962,7 +1044,8 @@ export default function SmashTournamentELO({
     playerFilter?: string[],
     characterFilter?: string[],
     only1v1Filter?: boolean,
-    isBackgroundRefresh: boolean = false
+    isBackgroundRefresh: boolean = false,
+    bypassBrowserCache: boolean = false
   ) => {
     // Only set loading state for initial page load (not for appending or background refresh)
     if (!append && !isBackgroundRefresh) {
@@ -981,7 +1064,9 @@ export default function SmashTournamentELO({
       );
 
       const url = `/api/matches?${params.toString()}`;
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        cache: bypassBrowserCache ? "no-store" : "default",
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch matches");
       }
@@ -1027,8 +1112,16 @@ export default function SmashTournamentELO({
     matchId: string,
     playerFilter: string[] = [],
     characterFilter: string[] = [],
-    only1v1Filter: boolean = false
+    only1v1Filter: boolean = false,
+    options: {
+      isBackgroundRefresh?: boolean;
+      bypassBrowserCache?: boolean;
+    } = {}
   ) => {
+    const {
+      isBackgroundRefresh = false,
+      bypassBrowserCache = false,
+    } = options;
     const trimmedMatchId = matchId.trim();
 
     if (!/^\d+$/.test(trimmedMatchId)) {
@@ -1036,7 +1129,11 @@ export default function SmashTournamentELO({
       return;
     }
 
-    setLoading(true);
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     setMatchSearchError(null);
     setAutoRefreshDisabled(true);
 
@@ -1051,7 +1148,9 @@ export default function SmashTournamentELO({
         only1v1Filter
       );
 
-      const response = await fetch(`/api/matches?${params.toString()}`);
+      const response = await fetch(`/api/matches?${params.toString()}`, {
+        cache: bypassBrowserCache ? "no-store" : "default",
+      });
       const data = (await response.json()) as MatchesApiResponse;
 
       if (!response.ok) {
@@ -1076,7 +1175,11 @@ export default function SmashTournamentELO({
           : "Failed to fetch match context. Please try again."
       );
     } finally {
-      setLoading(false);
+      if (!isBackgroundRefresh) {
+        setLoading(false);
+      } else {
+        setRefreshing(false);
+      }
     }
   };
 
@@ -1608,12 +1711,15 @@ export default function SmashTournamentELO({
                       </div>
                       <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                         <RefreshStatus
-                          refreshing={refreshing}
+                          refreshing={isRefreshing}
                           countdown={countdown}
                           lastUpdated={lastUpdated}
                           centered={false}
                         />
-                        <HardRefreshButton onRefresh={handleHardRefresh} />
+                        <HardRefreshButton
+                          onRefresh={handleHardRefresh}
+                          disabled={isRefreshing}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1675,7 +1781,7 @@ export default function SmashTournamentELO({
                   ) : (
                     <div
                       className={`p-6 transition-opacity duration-300 ${
-                        refreshing ? "opacity-75" : "opacity-100"
+                        isRefreshing ? "opacity-75" : "opacity-100"
                       }`}
                     >
                       <div className="overflow-x-auto rounded-xl">
@@ -2066,19 +2172,22 @@ export default function SmashTournamentELO({
                               Official Tier List
                             </h2>
                             <RefreshStatus
-                              refreshing={refreshing}
+                              refreshing={isRefreshing}
                               countdown={countdown}
                               lastUpdated={lastUpdated}
                               centered={true}
                             />
                           </div>
-                          <HardRefreshButton onRefresh={handleHardRefresh} />
+                          <HardRefreshButton
+                            onRefresh={handleHardRefresh}
+                            disabled={isRefreshing}
+                          />
                         </div>
                       </div>
 
                       <div
                         className={`p-6 transition-opacity duration-300 ${
-                          refreshing ? "opacity-75" : "opacity-100"
+                          isRefreshing ? "opacity-75" : "opacity-100"
                         }`}
                       >
                         {/* Tier List Table */}
@@ -2273,20 +2382,23 @@ export default function SmashTournamentELO({
                           </div>
                           <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                             <RefreshStatus
-                              refreshing={refreshing}
+                              refreshing={isRefreshing}
                               countdown={countdown}
                               lastUpdated={lastUpdated}
                               centered={false}
                               autoRefreshDisabled={autoRefreshDisabled}
                             />
-                            <HardRefreshButton onRefresh={handleHardRefresh} />
+                            <HardRefreshButton
+                              onRefresh={handleHardRefresh}
+                              disabled={isRefreshing}
+                            />
                           </div>
                         </div>
                       </div>
 
                       <div
                         className={`p-6 transition-opacity duration-300 ${
-                          refreshing ? "opacity-50" : "opacity-100"
+                          isRefreshing ? "opacity-50" : "opacity-100"
                         }`}
                       >
                         {shouldShowMatchIdSearchBar && (
@@ -2910,19 +3022,22 @@ export default function SmashTournamentELO({
                           </div>
                           <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                             <RefreshStatus
-                              refreshing={refreshing}
+                              refreshing={isRefreshing}
                               countdown={countdown}
                               lastUpdated={lastUpdated}
                               centered={false}
                             />
-                            <HardRefreshButton onRefresh={handleHardRefresh} />
+                            <HardRefreshButton
+                              onRefresh={handleHardRefresh}
+                              disabled={isRefreshing}
+                            />
                           </div>
                         </div>
                       </div>
 
                       <div
                         className={`p-6 transition-opacity duration-300 ${
-                          refreshing ? "opacity-75" : "opacity-100"
+                          isRefreshing ? "opacity-75" : "opacity-100"
                         }`}
                       >
                         {/* Ranked Players Section */}
