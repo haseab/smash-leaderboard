@@ -2,20 +2,170 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
+const MATCH_INCLUDE = {
+  match_participants: {
+    include: {
+      players: {
+        select: {
+          name: true,
+          display_name: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.matchesInclude;
+
+const MATCH_ORDER_BY: Prisma.matchesOrderByWithRelationInput[] = [
+  { created_at: "desc" },
+  { id: "desc" },
+];
+
+const MATCH_ORDER_BY_ASC: Prisma.matchesOrderByWithRelationInput[] = [
+  { created_at: "asc" },
+  { id: "asc" },
+];
+
+type MatchWithParticipants = Prisma.matchesGetPayload<{
+  include: typeof MATCH_INCLUDE;
+}>;
+
+const transformMatches = (matches: MatchWithParticipants[]) =>
+  matches.map((match) => ({
+    id: Number(match.id),
+    created_at: match.created_at.toISOString(),
+    participants: match.match_participants.map((participant) => ({
+      id: Number(participant.id),
+      player: Number(participant.player),
+      player_name: participant.players.name,
+      player_display_name: participant.players.display_name,
+      smash_character: participant.smash_character,
+      is_cpu: participant.is_cpu,
+      total_kos: participant.total_kos,
+      total_falls: participant.total_falls,
+      total_sds: participant.total_sds,
+      has_won: participant.has_won,
+    })),
+  }));
+
+const parsePositiveInt = (
+  value: string | null,
+  fallback: number,
+  max?: number
+) => {
+  const parsed = parseInt(value || "", 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return max ? Math.min(parsed, max) : parsed;
+};
+
+const buildRelativeMatchCondition = (
+  referenceMatch: { id: bigint; created_at: Date },
+  direction: "above" | "below"
+): Prisma.matchesWhereInput => {
+  if (direction === "above") {
+    return {
+      OR: [
+        {
+          created_at: {
+            gt: referenceMatch.created_at,
+          },
+        },
+        {
+          AND: [
+            {
+              created_at: referenceMatch.created_at,
+            },
+            {
+              id: {
+                gt: referenceMatch.id,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  return {
+    OR: [
+      {
+        created_at: {
+          lt: referenceMatch.created_at,
+        },
+      },
+      {
+        AND: [
+          {
+            created_at: referenceMatch.created_at,
+          },
+          {
+            id: {
+              lt: referenceMatch.id,
+            },
+          },
+        ],
+      },
+    ],
+  };
+};
+
+const getContextOrderBy = (direction: "above" | "below") =>
+  direction === "above" ? MATCH_ORDER_BY_ASC : MATCH_ORDER_BY;
+
+const normalizeContextMatches = (
+  matches: MatchWithParticipants[],
+  direction: "above" | "below",
+  limit: number
+) => {
+  const visibleMatches = matches.slice(0, limit);
+
+  return direction === "above" ? [...visibleMatches].reverse() : visibleMatches;
+};
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const page = parsePositiveInt(searchParams.get("page"), 1);
+    const limit = parsePositiveInt(searchParams.get("limit"), 20, 100);
     const offset = (page - 1) * limit;
     const playerFilter = searchParams.getAll("player");
     const characterFilter = searchParams.getAll("character");
     const only1v1 = searchParams.get("only1v1") === "true";
+    const matchIdParam = searchParams.get("matchId");
+    const directionParam = searchParams.get("direction");
+    const cursorMatchIdParam = searchParams.get("cursorMatchId");
+    const contextLimit = parsePositiveInt(
+      searchParams.get("contextLimit"),
+      2,
+      20
+    );
+
+    if (
+      directionParam &&
+      directionParam !== "above" &&
+      directionParam !== "below"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid context direction" },
+        { status: 400 }
+      );
+    }
+
+    const contextDirection =
+      directionParam === "above" || directionParam === "below"
+        ? directionParam
+        : null;
 
     console.log("API filters received:", {
       playerFilter,
       characterFilter,
       only1v1,
+      matchIdParam,
+      directionParam,
+      cursorMatchIdParam,
     });
 
     // Build Prisma where conditions - all filtering at database level
@@ -151,26 +301,159 @@ export async function GET(request: Request) {
       whereConditions.push(...characterConditions);
     }
 
+    if (matchIdParam) {
+      const anchorMatchId = parseInt(matchIdParam, 10);
+
+      if (Number.isNaN(anchorMatchId)) {
+        return NextResponse.json(
+          { error: "Invalid match ID" },
+          { status: 400 }
+        );
+      }
+
+      const anchorMatch = await prisma.matches.findFirst({
+        where: {
+          AND: [...whereConditions, { id: BigInt(anchorMatchId) }],
+        },
+        include: MATCH_INCLUDE,
+      });
+
+      if (!anchorMatch) {
+        return NextResponse.json(
+          { error: "Match not found with current filters" },
+          { status: 404 }
+        );
+      }
+
+      if (!contextDirection) {
+        const [aboveMatches, belowMatches] = await Promise.all([
+          prisma.matches.findMany({
+            where: {
+              AND: [
+                ...whereConditions,
+                buildRelativeMatchCondition(anchorMatch, "above"),
+              ],
+            },
+            include: MATCH_INCLUDE,
+            orderBy: getContextOrderBy("above"),
+            take: contextLimit + 1,
+          }),
+          prisma.matches.findMany({
+            where: {
+              AND: [
+                ...whereConditions,
+                buildRelativeMatchCondition(anchorMatch, "below"),
+              ],
+            },
+            include: MATCH_INCLUDE,
+            orderBy: getContextOrderBy("below"),
+            take: contextLimit + 1,
+          }),
+        ]);
+
+        const visibleAboveMatches = normalizeContextMatches(
+          aboveMatches,
+          "above",
+          contextLimit
+        );
+        const visibleBelowMatches = normalizeContextMatches(
+          belowMatches,
+          "below",
+          contextLimit
+        );
+
+        return NextResponse.json({
+          matches: transformMatches([
+            ...visibleAboveMatches,
+            anchorMatch,
+            ...visibleBelowMatches,
+          ]),
+          pagination: {
+            mode: "context",
+            anchorId: anchorMatchId,
+            contextLimit,
+            hasMoreAbove: aboveMatches.length > contextLimit,
+            hasMoreBelow: belowMatches.length > contextLimit,
+          },
+        });
+      }
+
+      const cursorMatchId = parseInt(
+        cursorMatchIdParam || anchorMatchId.toString(),
+        10
+      );
+
+      if (Number.isNaN(cursorMatchId)) {
+        return NextResponse.json(
+          { error: "Invalid context cursor match ID" },
+          { status: 400 }
+        );
+      }
+
+      const referenceMatch =
+        cursorMatchId === anchorMatchId
+          ? anchorMatch
+          : await prisma.matches.findFirst({
+              where: {
+                AND: [...whereConditions, { id: BigInt(cursorMatchId) }],
+              },
+              select: {
+                id: true,
+                created_at: true,
+              },
+            });
+
+      if (!referenceMatch) {
+        return NextResponse.json(
+          { error: "Context cursor match not found with current filters" },
+          { status: 404 }
+        );
+      }
+
+      const contextualMatches = await prisma.matches.findMany({
+        where: {
+          AND: [
+            ...whereConditions,
+            buildRelativeMatchCondition(referenceMatch, contextDirection),
+          ],
+        },
+        include: MATCH_INCLUDE,
+        orderBy: getContextOrderBy(contextDirection),
+        take: contextLimit + 1,
+      });
+
+      return NextResponse.json({
+        matches: transformMatches(
+          normalizeContextMatches(
+            contextualMatches,
+            contextDirection,
+            contextLimit
+          )
+        ),
+        pagination: {
+          mode: "context",
+          anchorId: anchorMatchId,
+          contextLimit,
+          direction: contextDirection,
+          hasMoreAbove:
+            contextDirection === "above"
+              ? contextualMatches.length > contextLimit
+              : undefined,
+          hasMoreBelow:
+            contextDirection === "below"
+              ? contextualMatches.length > contextLimit
+              : undefined,
+        },
+      });
+    }
+
     // Get matches with pagination - all filtering done at database level
     const matches = await prisma.matches.findMany({
       where: {
         AND: whereConditions,
       },
-      include: {
-        match_participants: {
-          include: {
-            players: {
-              select: {
-                name: true,
-                display_name: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        created_at: "desc",
-      },
+      include: MATCH_INCLUDE,
+      orderBy: MATCH_ORDER_BY,
       skip: offset,
       take: limit,
     });
@@ -186,23 +469,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // Transform the data to match the frontend interface
-    const transformedMatches = matches.map((match) => ({
-      id: Number(match.id),
-      created_at: match.created_at.toISOString(),
-      participants: match.match_participants.map((participant) => ({
-        id: Number(participant.id),
-        player: Number(participant.player),
-        player_name: participant.players.name,
-        player_display_name: participant.players.display_name,
-        smash_character: participant.smash_character,
-        is_cpu: participant.is_cpu,
-        total_kos: participant.total_kos,
-        total_falls: participant.total_falls,
-        total_sds: participant.total_sds,
-        has_won: participant.has_won,
-      })),
-    }));
+    const transformedMatches = transformMatches(matches);
 
     console.log(
       `Returning ${transformedMatches.length} matches for page ${page}`

@@ -15,6 +15,7 @@ import {
   Filter,
   List,
   RefreshCw,
+  Search,
   Swords,
   Trophy,
   Users,
@@ -66,7 +67,26 @@ interface Match {
   participants: MatchParticipant[];
 }
 
+interface MatchesApiResponse {
+  matches?: Match[];
+  pagination?: {
+    page?: number;
+    limit?: number;
+    hasMore?: boolean;
+    mode?: "list" | "context";
+    anchorId?: number;
+    contextLimit?: number;
+    direction?: "above" | "below";
+    hasMoreAbove?: boolean;
+    hasMoreBelow?: boolean;
+  };
+  error?: string;
+}
+
 type Tier = "S" | "A" | "B" | "C" | "D" | "E";
+
+const MATCHES_PAGE_SIZE = 20;
+const MATCH_CONTEXT_PAGE_SIZE = 2;
 
 // Memoized component for refresh status to prevent unnecessary rerendersO
 const RefreshStatus = memo(
@@ -405,6 +425,14 @@ export default function SmashTournamentELO({
   const [matchesPage, setMatchesPage] = useState<number>(1);
   const [loadingMoreMatches, setLoadingMoreMatches] = useState<boolean>(false);
   const [hasMoreMatches, setHasMoreMatches] = useState<boolean>(true);
+  const [loadingMatchesAbove, setLoadingMatchesAbove] =
+    useState<boolean>(false);
+  const [loadingMatchesBelow, setLoadingMatchesBelow] =
+    useState<boolean>(false);
+  const [hasMoreMatchesAbove, setHasMoreMatchesAbove] =
+    useState<boolean>(false);
+  const [hasMoreMatchesBelow, setHasMoreMatchesBelow] =
+    useState<boolean>(false);
   const [selectedPlayerFilter, setSelectedPlayerFilter] = useState<string[]>(
     []
   );
@@ -412,6 +440,9 @@ export default function SmashTournamentELO({
     string[]
   >([]);
   const [only1v1, setOnly1v1] = useState<boolean>(false);
+  const [matchIdSearchInput, setMatchIdSearchInput] = useState<string>("");
+  const [matchContextId, setMatchContextId] = useState<number | null>(null);
+  const [matchSearchError, setMatchSearchError] = useState<string | null>(null);
   const [autoRefreshDisabled, setAutoRefreshDisabled] =
     useState<boolean>(false);
   const [showFilters, setShowFilters] = useState<boolean>(false);
@@ -420,6 +451,9 @@ export default function SmashTournamentELO({
   >("ranked");
   const [showUtcTime, setShowUtcTime] = useState<boolean>(false);
   const [refreshingMatches, setRefreshingMatches] = useState<Set<number>>(
+    new Set()
+  );
+  const [banningPlayerIds, setBanningPlayerIds] = useState<Set<number>>(
     new Set()
   );
 
@@ -435,19 +469,15 @@ export default function SmashTournamentELO({
       const players = searchParams.getAll("player");
       const characters = searchParams.getAll("character");
       const only1v1Param = searchParams.get("only1v1") === "true";
+      const matchIdParam = searchParams.get("matchId") || "";
+      const hasFilters =
+        players.length > 0 || characters.length > 0 || only1v1Param;
 
-      if (players.length > 0) {
-        setSelectedPlayerFilter(players);
-        setShowFilters(true);
-      }
-      if (characters.length > 0) {
-        setSelectedCharacterFilter(characters);
-        setShowFilters(true);
-      }
-      if (only1v1Param) {
-        setOnly1v1(true);
-        setShowFilters(true);
-      }
+      setSelectedPlayerFilter(players);
+      setSelectedCharacterFilter(characters);
+      setOnly1v1(only1v1Param);
+      setMatchIdSearchInput(matchIdParam.replace(/\D/g, ""));
+      setShowFilters(hasFilters);
     }
   }, [defaultTab, searchParams]);
 
@@ -573,16 +603,21 @@ export default function SmashTournamentELO({
   const updateMatchesURL = (
     playerFilter: string[],
     characterFilter: string[],
-    only1v1Filter: boolean
+    only1v1Filter: boolean,
+    matchIdFilter: string = ""
   ) => {
     if (defaultTab === "matches") {
       const params = new URLSearchParams();
+      const showMatchIdSearchParam =
+        searchParams.get("showMatchIdSearch") === "true";
 
       playerFilter.forEach((player) => params.append("player", player));
       characterFilter.forEach((character) =>
         params.append("character", character)
       );
       if (only1v1Filter) params.append("only1v1", "true");
+      if (matchIdFilter.trim()) params.append("matchId", matchIdFilter.trim());
+      if (showMatchIdSearchParam) params.append("showMatchIdSearch", "true");
 
       const queryString = params.toString();
       const newUrl = queryString ? `/matches?${queryString}` : "/matches";
@@ -662,7 +697,18 @@ export default function SmashTournamentELO({
       const players = searchParams.getAll("player");
       const characters = searchParams.getAll("character");
       const only1v1Param = searchParams.get("only1v1") === "true";
-      fetchMatches(1, false, players, characters, only1v1Param);
+      const matchIdParam = (searchParams.get("matchId") || "").replace(
+        /\D/g,
+        ""
+      );
+
+      setAutoRefreshDisabled(Boolean(matchIdParam));
+
+      if (matchIdParam) {
+        fetchMatchContext(matchIdParam, players, characters, only1v1Param);
+      } else {
+        fetchMatches(1, false, players, characters, only1v1Param);
+      }
     }
 
     // Set up automatic refresh every 30 seconds - but only run for current active tab
@@ -800,6 +846,116 @@ export default function SmashTournamentELO({
     }
   };
 
+  const clearPlayersCache = () => {
+    setPlayersCache(null);
+    try {
+      localStorage.removeItem("playersCache");
+    } catch {
+      // Ignore localStorage failures and continue with in-memory state.
+    }
+  };
+
+  const handleBanPlayer = async (player: ExtendedPlayer) => {
+    const playerLabel =
+      player.display_name || player.name || `Player ${player.id}`;
+    const confirmed = window.confirm(
+      `Ban ${playerLabel}? This hides the player and any match history involving them.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setBanningPlayerIds((prev) => new Set(prev).add(player.id));
+
+    try {
+      const response = await fetch(`/api/players/${player.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ banned: true }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error || "Failed to ban player");
+      }
+
+      clearPlayersCache();
+      await fetchPlayers(true);
+    } catch (err) {
+      console.error("Error banning player:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to ban player. Please try again later."
+      );
+    } finally {
+      setBanningPlayerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(player.id);
+        return next;
+      });
+    }
+  };
+
+  const renderBanButton = (player: ExtendedPlayer) => {
+    const isBanning = banningPlayerIds.has(player.id);
+
+    return (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void handleBanPlayer(player);
+        }}
+        disabled={isBanning}
+        className={`inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition-colors md:text-sm ${
+          isBanning
+            ? "cursor-not-allowed bg-gray-700 text-gray-300"
+            : "bg-red-600 text-white hover:bg-red-700"
+        }`}
+      >
+        <X size={14} />
+        <span>{isBanning ? "Banning..." : "Ban"}</span>
+      </button>
+    );
+  };
+
+  const appendMatchFilterParams = (
+    params: URLSearchParams,
+    playerFilter: string[] = [],
+    characterFilter: string[] = [],
+    only1v1Filter: boolean = false
+  ) => {
+    playerFilter.forEach((player) => params.append("player", player));
+    characterFilter.forEach((character) =>
+      params.append("character", character)
+    );
+
+    if (only1v1Filter) {
+      params.append("only1v1", "true");
+    }
+  };
+
+  const mergeMatchesByDirection = (
+    existingMatches: Match[],
+    newMatches: Match[],
+    direction: "above" | "below"
+  ) => {
+    const existingIds = new Set(existingMatches.map((match) => match.id));
+    const uniqueMatches = newMatches.filter(
+      (match) => !existingIds.has(match.id)
+    );
+
+    return direction === "above"
+      ? [...uniqueMatches, ...existingMatches]
+      : [...existingMatches, ...uniqueMatches];
+  };
   const fetchMatches = async (
     page: number = 1,
     append: boolean = false,
@@ -816,26 +972,20 @@ export default function SmashTournamentELO({
     try {
       const params = new URLSearchParams();
       params.append("page", page.toString());
-      params.append("limit", "20");
-
-      if (playerFilter && playerFilter.length > 0) {
-        playerFilter.forEach((player) => params.append("player", player));
-      }
-      if (characterFilter && characterFilter.length > 0) {
-        characterFilter.forEach((character) =>
-          params.append("character", character)
-        );
-      }
-      if (only1v1Filter) {
-        params.append("only1v1", "true");
-      }
+      params.append("limit", MATCHES_PAGE_SIZE.toString());
+      appendMatchFilterParams(
+        params,
+        playerFilter || [],
+        characterFilter || [],
+        only1v1Filter || false
+      );
 
       const url = `/api/matches?${params.toString()}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error("Failed to fetch matches");
       }
-      const data = await response.json();
+      const data = (await response.json()) as MatchesApiResponse | Match[];
 
       // Handle both old format (direct array) and new format (object with matches and pagination)
       let matches: Match[];
@@ -844,7 +994,7 @@ export default function SmashTournamentELO({
       if (Array.isArray(data)) {
         // Old format compatibility
         matches = data;
-        hasMore = data.length === 20;
+        hasMore = data.length === MATCHES_PAGE_SIZE;
       } else {
         // New format
         matches = data.matches || [];
@@ -855,6 +1005,10 @@ export default function SmashTournamentELO({
         setMatches((prev) => [...prev, ...matches]);
       } else {
         setMatches(matches);
+        setMatchContextId(null);
+        setMatchSearchError(null);
+        setHasMoreMatchesAbove(false);
+        setHasMoreMatchesBelow(false);
       }
 
       setHasMoreMatches(hasMore);
@@ -866,6 +1020,63 @@ export default function SmashTournamentELO({
       if (!append && !isBackgroundRefresh) {
         setLoading(false);
       }
+    }
+  };
+
+  const fetchMatchContext = async (
+    matchId: string,
+    playerFilter: string[] = [],
+    characterFilter: string[] = [],
+    only1v1Filter: boolean = false
+  ) => {
+    const trimmedMatchId = matchId.trim();
+
+    if (!/^\d+$/.test(trimmedMatchId)) {
+      setMatchSearchError("Enter a valid numeric match ID.");
+      return;
+    }
+
+    setLoading(true);
+    setMatchSearchError(null);
+    setAutoRefreshDisabled(true);
+
+    try {
+      const params = new URLSearchParams();
+      params.append("matchId", trimmedMatchId);
+      params.append("contextLimit", MATCH_CONTEXT_PAGE_SIZE.toString());
+      appendMatchFilterParams(
+        params,
+        playerFilter,
+        characterFilter,
+        only1v1Filter
+      );
+
+      const response = await fetch(`/api/matches?${params.toString()}`);
+      const data = (await response.json()) as MatchesApiResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch match context");
+      }
+
+      setMatches(data.matches || []);
+      setMatchContextId(Number(trimmedMatchId));
+      setHasMoreMatches(false);
+      setHasMoreMatchesAbove(Boolean(data.pagination?.hasMoreAbove));
+      setHasMoreMatchesBelow(Boolean(data.pagination?.hasMoreBelow));
+    } catch (err) {
+      console.error("Error fetching match context:", err);
+      setMatches([]);
+      setMatchContextId(null);
+      setHasMoreMatches(false);
+      setHasMoreMatchesAbove(false);
+      setHasMoreMatchesBelow(false);
+      setMatchSearchError(
+        err instanceof Error
+          ? err.message
+          : "Failed to fetch match context. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -884,6 +1095,81 @@ export default function SmashTournamentELO({
     );
     setMatchesPage(nextPage);
     setLoadingMoreMatches(false);
+  };
+
+  const loadMoreMatchContext = async (direction: "above" | "below") => {
+    if (!matchContextId || matches.length === 0) {
+      return;
+    }
+
+    const isLoadingDirection =
+      direction === "above" ? loadingMatchesAbove : loadingMatchesBelow;
+    const hasMoreDirection =
+      direction === "above" ? hasMoreMatchesAbove : hasMoreMatchesBelow;
+
+    if (isLoadingDirection || !hasMoreDirection) {
+      return;
+    }
+
+    const cursorMatchId =
+      direction === "above" ? matches[0]?.id : matches[matches.length - 1]?.id;
+
+    if (!cursorMatchId) {
+      return;
+    }
+
+    setMatchSearchError(null);
+    setAutoRefreshDisabled(true);
+
+    if (direction === "above") {
+      setLoadingMatchesAbove(true);
+    } else {
+      setLoadingMatchesBelow(true);
+    }
+
+    try {
+      const params = new URLSearchParams();
+      params.append("matchId", matchContextId.toString());
+      params.append("direction", direction);
+      params.append("cursorMatchId", cursorMatchId.toString());
+      params.append("contextLimit", MATCH_CONTEXT_PAGE_SIZE.toString());
+      appendMatchFilterParams(
+        params,
+        selectedPlayerFilter,
+        selectedCharacterFilter,
+        only1v1
+      );
+
+      const response = await fetch(`/api/matches?${params.toString()}`);
+      const data = (await response.json()) as MatchesApiResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load more match context");
+      }
+
+      setMatches((prev) =>
+        mergeMatchesByDirection(prev, data.matches || [], direction)
+      );
+
+      if (direction === "above") {
+        setHasMoreMatchesAbove(Boolean(data.pagination?.hasMoreAbove));
+      } else {
+        setHasMoreMatchesBelow(Boolean(data.pagination?.hasMoreBelow));
+      }
+    } catch (err) {
+      console.error("Error loading more match context:", err);
+      setMatchSearchError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load more matches in this direction."
+      );
+    } finally {
+      if (direction === "above") {
+        setLoadingMatchesAbove(false);
+      } else {
+        setLoadingMatchesBelow(false);
+      }
+    }
   };
 
   // Function to refresh a single match
@@ -915,18 +1201,89 @@ export default function SmashTournamentELO({
     }
   };
 
+  const handleMatchIdSearch = async () => {
+    const trimmedMatchId = matchIdSearchInput.trim();
+
+    if (!trimmedMatchId) {
+      setMatchSearchError("Enter a match ID to search.");
+      return;
+    }
+
+    if (!/^\d+$/.test(trimmedMatchId)) {
+      setMatchSearchError("Enter a valid numeric match ID.");
+      return;
+    }
+
+    setMatchesPage(1);
+    updateMatchesURL(
+      selectedPlayerFilter,
+      selectedCharacterFilter,
+      only1v1,
+      trimmedMatchId
+    );
+    await fetchMatchContext(
+      trimmedMatchId,
+      selectedPlayerFilter,
+      selectedCharacterFilter,
+      only1v1
+    );
+  };
+
+  const clearMatchIdSearch = async () => {
+    setMatchIdSearchInput("");
+    setMatchSearchError(null);
+    setMatchContextId(null);
+    setHasMoreMatchesAbove(false);
+    setHasMoreMatchesBelow(false);
+    setMatchesPage(1);
+    setAutoRefreshDisabled(false);
+
+    updateMatchesURL(selectedPlayerFilter, selectedCharacterFilter, only1v1);
+    await fetchMatches(
+      1,
+      false,
+      selectedPlayerFilter,
+      selectedCharacterFilter,
+      only1v1
+    );
+  };
+
   // Search function to manually trigger filtering
   const handleSearch = async () => {
     console.log("handleSearch called with filters:", {
       player: selectedPlayerFilter,
       character: selectedCharacterFilter,
       only1v1: only1v1,
+      matchId: matchIdSearchInput,
     });
     setMatchesPage(1);
 
-    // Update URL with current filters
-    updateMatchesURL(selectedPlayerFilter, selectedCharacterFilter, only1v1);
+    const trimmedMatchId = matchIdSearchInput.trim();
 
+    if (trimmedMatchId) {
+      if (!/^\d+$/.test(trimmedMatchId)) {
+        setMatchSearchError("Enter a valid numeric match ID.");
+        return;
+      }
+
+      updateMatchesURL(
+        selectedPlayerFilter,
+        selectedCharacterFilter,
+        only1v1,
+        trimmedMatchId
+      );
+      await fetchMatchContext(
+        trimmedMatchId,
+        selectedPlayerFilter,
+        selectedCharacterFilter,
+        only1v1
+      );
+      return;
+    }
+
+    setAutoRefreshDisabled(false);
+
+    updateMatchesURL(selectedPlayerFilter, selectedCharacterFilter, only1v1);
     await fetchMatches(
       1,
       false,
@@ -963,6 +1320,14 @@ export default function SmashTournamentELO({
 
   // Sort players by ELO
   const sortedPlayers = [...players].sort((a, b) => b.elo - a.elo);
+  const trimmedMatchIdSearchInput = matchIdSearchInput.trim();
+  const isMatchContextActive = matchContextId !== null;
+  const hasActiveMatchSearch =
+    trimmedMatchIdSearchInput.length > 0 ||
+    isMatchContextActive ||
+    matchSearchError !== null;
+  const shouldShowMatchIdSearchBar =
+    searchParams.get("showMatchIdSearch") === "true" || hasActiveMatchSearch;
 
   // Separate active and inactive players
   const activePlayers = sortedPlayers.filter((player) => !player.inactive);
@@ -1855,7 +2220,7 @@ export default function SmashTournamentELO({
               {/* Matches Tab */}
               {activeTab === "matches" && (
                 <div>
-                  {matches.length === 0 && !showFilters ? (
+                  {matches.length === 0 && !showFilters && !hasActiveMatchSearch ? (
                     <div className="text-gray-400 text-center py-16 bg-gray-900 bg-opacity-50 rounded-2xl">
                       <p className="text-2xl font-bold">
                         No battles have been fought yet!
@@ -1924,6 +2289,78 @@ export default function SmashTournamentELO({
                           refreshing ? "opacity-50" : "opacity-100"
                         }`}
                       >
+                        {shouldShowMatchIdSearchBar && (
+                          <div className="mb-6 rounded-xl border border-gray-700 bg-gray-800/90 p-4">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+                              <div className="flex-1">
+                                <label className="mb-2 block text-sm font-medium text-gray-300">
+                                  Jump to Match ID
+                                </label>
+                                <div className="flex flex-col gap-3 sm:flex-row">
+                                  <div className="relative flex-1">
+                                    <Search
+                                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                                      size={16}
+                                    />
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      value={matchIdSearchInput}
+                                      onChange={(event) => {
+                                        setMatchIdSearchInput(
+                                          event.target.value.replace(/\D/g, "")
+                                        );
+                                        if (matchSearchError) {
+                                          setMatchSearchError(null);
+                                        }
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter") {
+                                          void handleMatchIdSearch();
+                                        }
+                                      }}
+                                      placeholder="Search a specific match_id"
+                                      className="w-full rounded-lg border border-gray-600 bg-gray-700 py-2 pl-10 pr-3 text-white transition-colors duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <button
+                                    onClick={handleMatchIdSearch}
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2 font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
+                                  >
+                                    <Search size={16} />
+                                    Search Match
+                                  </button>
+                                  {(trimmedMatchIdSearchInput ||
+                                    isMatchContextActive) && (
+                                    <button
+                                      onClick={clearMatchIdSearch}
+                                      className="inline-flex items-center justify-center rounded-lg bg-gray-600 px-5 py-2 font-semibold text-white transition-colors duration-200 hover:bg-gray-500"
+                                    >
+                                      Clear Search
+                                    </button>
+                                  )}
+                                </div>
+                                <p className="mt-2 text-sm text-gray-400">
+                                  Shows the requested match with 2 matches above
+                                  it and 2 below it. Use the load buttons to keep
+                                  expanding in either direction.
+                                </p>
+                                {matchSearchError && (
+                                  <p className="mt-2 text-sm font-medium text-red-400">
+                                    {matchSearchError}
+                                  </p>
+                                )}
+                              </div>
+                              {isMatchContextActive && (
+                                <div className="rounded-lg border border-blue-500/40 bg-blue-950/40 px-4 py-3 text-sm text-blue-100">
+                                  Showing context around Match #{matchContextId}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Filter Section */}
                         {showFilters && (
                           <>
@@ -2006,7 +2443,13 @@ export default function SmashTournamentELO({
                                     setSelectedPlayerFilter([]);
                                     setSelectedCharacterFilter([]);
                                     setOnly1v1(false);
+                                    setMatchIdSearchInput("");
+                                    setMatchContextId(null);
+                                    setMatchSearchError(null);
                                     setMatchesPage(1);
+                                    setHasMoreMatchesAbove(false);
+                                    setHasMoreMatchesBelow(false);
+                                    setAutoRefreshDisabled(false);
                                     updateMatchesURL([], [], false);
                                     await fetchMatches(1, false, [], [], false);
                                   }}
@@ -2022,15 +2465,42 @@ export default function SmashTournamentELO({
                         {matches.length === 0 ? (
                           <div className="text-gray-400 text-center py-16">
                             <p className="text-xl font-bold">
-                              No matches found with current filters
+                              {matchSearchError
+                                ? "Match lookup failed"
+                                : "No matches found with current filters"}
                             </p>
                             <p className="mt-2">
-                              Try adjusting your filters or clear them to see
-                              all matches
+                              {matchSearchError
+                                ? "Try a different match ID or clear the match search to return to the full list."
+                                : "Try adjusting your filters or clear them to see all matches"}
                             </p>
                           </div>
                         ) : (
                           <>
+                            {isMatchContextActive &&
+                              (loadingMatchesAbove || hasMoreMatchesAbove) && (
+                              <div className="mb-4 flex justify-center">
+                                <button
+                                  onClick={() =>
+                                    loadMoreMatchContext("above")
+                                  }
+                                  disabled={
+                                    loadingMatchesAbove || !hasMoreMatchesAbove
+                                  }
+                                  className="inline-flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-5 py-2 font-semibold text-white transition-colors duration-200 hover:bg-gray-700 disabled:cursor-not-allowed disabled:border-gray-700 disabled:bg-gray-800/60 disabled:text-gray-400"
+                                >
+                                  {loadingMatchesAbove ? (
+                                    <>
+                                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                                      <span>Loading newer matches...</span>
+                                    </>
+                                  ) : (
+                                    <span>Load More Above</span>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+
                             <div className="space-y-4">
                               {matches.map((match) => {
                                 const participants = match.participants.sort(
@@ -2114,6 +2584,10 @@ export default function SmashTournamentELO({
                                                 onClick={() => {
                                                   const is1v1 =
                                                     playerIds.length === 2;
+                                                  const nextMatchId =
+                                                    isMatchContextActive
+                                                      ? match.id.toString()
+                                                      : "";
                                                   setSelectedPlayerFilter(
                                                     playerIds
                                                   );
@@ -2121,9 +2595,28 @@ export default function SmashTournamentELO({
                                                     []
                                                   );
                                                   setOnly1v1(is1v1);
+                                                  setMatchIdSearchInput(
+                                                    nextMatchId
+                                                  );
                                                   setShowFilters(true);
                                                   setTimeout(async () => {
                                                     setMatchesPage(1);
+                                                    if (nextMatchId) {
+                                                      updateMatchesURL(
+                                                        playerIds,
+                                                        [],
+                                                        is1v1,
+                                                        nextMatchId
+                                                      );
+                                                      await fetchMatchContext(
+                                                        nextMatchId,
+                                                        playerIds,
+                                                        [],
+                                                        is1v1
+                                                      );
+                                                      return;
+                                                    }
+
                                                     updateMatchesURL(
                                                       playerIds,
                                                       [],
@@ -2310,27 +2803,51 @@ export default function SmashTournamentELO({
                               })}
                             </div>
 
-                            {/* Load More Button */}
-                            {hasMoreMatches && (
-                              <div className="flex justify-center mt-6">
-                                <button
-                                  onClick={loadMoreMatches}
-                                  disabled={loadingMoreMatches}
-                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-lg"
-                                >
-                                  {loadingMoreMatches ? (
-                                    <>
-                                      <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-                                      <span>Loading more matches...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Swords size={20} />
-                                      <span>Load More Matches</span>
-                                    </>
-                                  )}
-                                </button>
+                            {isMatchContextActive ? (
+                              <div className="mt-6 flex justify-center">
+                                {(loadingMatchesBelow || hasMoreMatchesBelow) && (
+                                  <button
+                                    onClick={() =>
+                                      loadMoreMatchContext("below")
+                                    }
+                                    disabled={
+                                      loadingMatchesBelow || !hasMoreMatchesBelow
+                                    }
+                                    className="inline-flex items-center gap-2 rounded-lg border border-gray-600 bg-gray-800 px-5 py-2 font-semibold text-white transition-colors duration-200 hover:bg-gray-700 disabled:cursor-not-allowed disabled:border-gray-700 disabled:bg-gray-800/60 disabled:text-gray-400"
+                                  >
+                                    {loadingMatchesBelow ? (
+                                      <>
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                                        <span>Loading older matches...</span>
+                                      </>
+                                    ) : (
+                                      <span>Load More Below</span>
+                                    )}
+                                  </button>
+                                )}
                               </div>
+                            ) : (
+                              hasMoreMatches && (
+                                <div className="flex justify-center mt-6">
+                                  <button
+                                    onClick={loadMoreMatches}
+                                    disabled={loadingMoreMatches}
+                                    className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center space-x-2 shadow-lg"
+                                  >
+                                    {loadingMoreMatches ? (
+                                      <>
+                                        <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                                        <span>Loading more matches...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Swords size={20} />
+                                        <span>Load More Matches</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              )
                             )}
                           </>
                         )}
