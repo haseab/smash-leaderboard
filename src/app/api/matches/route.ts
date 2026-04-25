@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { resolvePlayersByQueryValues } from "@/lib/server/playerQueryResolver";
 import { Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
 
 const MATCH_INCLUDE = {
   match_participants: {
@@ -158,15 +159,34 @@ export async function GET(request: Request) {
       directionParam === "above" || directionParam === "below"
         ? directionParam
         : null;
+    const {
+      playerIds: resolvedPlayerFilterIds,
+      allResolved: allPlayerFiltersResolved,
+    } = await resolvePlayersByQueryValues(playerFilter);
 
     console.log("API filters received:", {
       playerFilter,
+      resolvedPlayerFilter: resolvedPlayerFilterIds.map(String),
       characterFilter,
       only1v1,
       matchIdParam,
       directionParam,
       cursorMatchIdParam,
     });
+
+    if (playerFilter.length > 0 && !allPlayerFiltersResolved) {
+      if (matchIdParam) {
+        return NextResponse.json(
+          { error: "Match not found with current filters" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        matches: [],
+        pagination: { page, limit, hasMore: false },
+      });
+    }
 
     // Build Prisma where conditions - all filtering at database level
     const whereConditions: Prisma.matchesWhereInput[] = [
@@ -189,9 +209,7 @@ export async function GET(request: Request) {
     // Prisma doesn't support HAVING COUNT in where clauses, so we use raw SQL
     // This is still efficient - we only get match IDs, not full match data
     if (only1v1) {
-      const playerIds = playerFilter.length > 0 
-        ? playerFilter.map((id) => BigInt(id))
-        : [];
+      const playerIds = resolvedPlayerFilterIds;
 
       if (playerIds.length > 0) {
         // 1v1 + player filter: Use raw SQL to combine both conditions efficiently
@@ -276,9 +294,8 @@ export async function GET(request: Request) {
     // Player filter: ALL specified players must be in the match (AND logic)
     // Only apply if not already handled by 1v1 filter above
     if (playerFilter.length > 0 && !only1v1) {
-      const playerIds = playerFilter.map((id) => BigInt(id));
       // For each player, ensure they have a participant record in the match
-      const playerConditions = playerIds.map((playerId) => ({
+      const playerConditions = resolvedPlayerFilterIds.map((playerId) => ({
         match_participants: {
           some: {
             player: playerId,

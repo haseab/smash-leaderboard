@@ -23,7 +23,8 @@ model players {
   top_ten_played        Int      @default(0)
   
   // Relations
-  match_participants match_participants[]
+  match_participants  match_participants[]
+  character_rankings character_rankings[]
   
   @@index([elo(sort: Desc)], name: "idx_players_elo")
   @@map("players")
@@ -61,4 +62,27 @@ model match_participants {
   @@index([player, smash_character])
   @@index([match_id, player, is_cpu])
   @@map("match_participants")
+}
+
+model character_rankings {
+  id                 BigInt    @id @default(autoincrement())
+  created_at         DateTime  @default(now())
+  player             BigInt
+  smash_character    String
+  elo                BigInt    @default(1200)
+  total_wins         Int       @default(0)
+  total_losses       Int       @default(0)
+  total_kos          Int       @default(0)
+  total_falls        Int       @default(0)
+  total_sds          Int       @default(0)
+  current_win_streak Int       @default(0)
+  last_match_date    DateTime?
+
+  // Relations
+  players players @relation(fields: [player], references: [id], onDelete: Cascade)
+
+  @@unique([player, smash_character])
+  @@index([elo(sort: Desc)], name: "idx_character_rankings_elo")
+  @@index([player, last_match_date(sort: Desc)], name: "idx_character_rankings_player_last_match")
+  @@map("character_rankings")
 }
