@@ -146,6 +146,8 @@ const MATCH_CONTEXT_PAGE_SIZE = 2;
 const CHARACTER_RANKINGS_BATCH_SIZE = 50;
 const CHARACTER_RANKING_MIN_MATCHES = 5;
 const DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT = 3;
+const RANKINGS_VIEW_QUERY_PARAM = "rankingsView";
+const LEGACY_OVERALL_VIEW_QUERY_PARAM = "overallView";
 const RANKING_QUERY_CHARACTER_PARAM = "rankingCharacter";
 const RANKING_QUERY_PLAYER_PARAM = "rankingPlayer";
 const RANKING_QUERY_PLAYER_LIMIT_PARAM = "rankingPlayerLimit";
@@ -186,7 +188,9 @@ const parseLeaderboardTab = (value: string | null): LeaderboardTab => {
   }
 };
 
-const parseOverallRankingsView = (value: string | null): OverallRankingsView => {
+const parseLegacyOverallRankingsView = (
+  value: string | null
+): OverallRankingsView => {
   switch (value) {
     case "all-characters":
     case "best-character":
@@ -195,6 +199,26 @@ const parseOverallRankingsView = (value: string | null): OverallRankingsView => 
       return "best-character";
   }
 };
+
+const parseOverallRankingsView = (
+  value: string | null,
+  legacyValue: string | null
+): OverallRankingsView => {
+  switch (value) {
+    case "overall":
+    case "all-characters":
+      return "all-characters";
+    case "character-based":
+    case "character":
+    case "best-character":
+      return "best-character";
+    default:
+      return parseLegacyOverallRankingsView(legacyValue);
+  }
+};
+
+const serializeOverallRankingsView = (value: OverallRankingsView): string =>
+  value === "all-characters" ? "overall" : "character-based";
 
 const parseTierListView = (value: string | null): TierListView => {
   switch (value) {
@@ -701,8 +725,15 @@ export default function SmashTournamentELO({
       : "overall";
   const overallRankingsView =
     defaultTab === "rankings"
-      ? parseOverallRankingsView(searchParams.get("overallView"))
+      ? parseOverallRankingsView(
+          searchParams.get(RANKINGS_VIEW_QUERY_PARAM),
+          searchParams.get(LEGACY_OVERALL_VIEW_QUERY_PARAM)
+        )
       : "best-character";
+  const hasExplicitOverallRankingsViewParam =
+    defaultTab === "rankings" &&
+    (searchParams.has(RANKINGS_VIEW_QUERY_PARAM) ||
+      searchParams.has(LEGACY_OVERALL_VIEW_QUERY_PARAM));
   const selectedCharacterRankingCharacter =
     defaultTab === "rankings"
       ? (searchParams.get(RANKING_QUERY_CHARACTER_PARAM) || "").trim()
@@ -980,7 +1011,7 @@ export default function SmashTournamentELO({
 
   const handleViewTopCharacters = (playerId: number) => {
     const params = new URLSearchParams();
-    params.set("overallView", "best-character");
+    params.set(RANKINGS_VIEW_QUERY_PARAM, "character-based");
     params.set(RANKING_QUERY_PLAYER_LIMIT_PARAM, "all");
     params.append(
       RANKING_QUERY_PLAYER_PARAM,
@@ -1071,7 +1102,8 @@ export default function SmashTournamentELO({
     const params = new URLSearchParams(searchParams.toString());
 
     params.delete("leaderboard");
-    params.delete("overallView");
+    params.delete(RANKINGS_VIEW_QUERY_PARAM);
+    params.delete(LEGACY_OVERALL_VIEW_QUERY_PARAM);
     params.delete(RANKING_QUERY_CHARACTER_PARAM);
     params.delete("rankingPlayerMode");
     params.delete(RANKING_QUERY_PLAYER_PARAM);
@@ -1082,10 +1114,13 @@ export default function SmashTournamentELO({
     }
 
     if (
-      mergedState.leaderboardTab === "overall" &&
-      mergedState.overallRankingsView !== "best-character"
+      mergedState.overallRankingsView !== "best-character" ||
+      hasExplicitOverallRankingsViewParam
     ) {
-      params.set("overallView", mergedState.overallRankingsView);
+      params.set(
+        RANKINGS_VIEW_QUERY_PARAM,
+        serializeOverallRankingsView(mergedState.overallRankingsView)
+      );
     }
 
     if (

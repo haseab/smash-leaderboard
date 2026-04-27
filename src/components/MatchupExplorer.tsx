@@ -817,7 +817,7 @@ export default function MatchupExplorer({
     const rankingPlayer = serializePlayerIdToQueryValue(playerId, players);
     const params = new URLSearchParams();
 
-    params.set("overallView", "best-character");
+    params.set("rankingsView", "character-based");
     params.append("rankingPlayer", rankingPlayer);
 
     router.push(`/?${params.toString()}`);
