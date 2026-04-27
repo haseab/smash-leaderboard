@@ -66,8 +66,19 @@ interface CharacterRanking {
   last_match_date?: string | null;
 }
 
-type BestCharacterTierEntry = CharacterRanking & {
+type TierListEntry = {
+  key: string;
+  player_id: number;
+  name: string;
+  display_name: string | null;
+  picture?: string | null;
+  country?: string | null;
+  character_name: string | null;
+  characterLabel: "Character Based" | "Main character";
+  elo: number;
+  current_win_streak?: number;
   inactive: boolean;
+  showInactiveOverlay: boolean;
 };
 
 // Match participant interface
@@ -111,12 +122,20 @@ type Tier = "S" | "A" | "B" | "C" | "D" | "E" | "F";
 type CacheTag = "players" | "matches";
 type LeaderboardTab = "overall" | "character" | "unranked" | "inactive";
 type OverallRankingsView = "all-characters" | "best-character";
+type TierListView = "all-characters" | "best-character";
 type CharacterRankingPlayerFilterMode = "include" | "exclude";
 type CharacterRankingPlayerRowLimit = 1 | 2 | 3 | 4 | 5 | "all";
+
+interface CharacterBasedFilterQueryState {
+  characterRankingPlayerFilterMode: CharacterRankingPlayerFilterMode;
+  selectedCharacterRankingPlayerIds: string[];
+  characterRankingPlayerRowLimit: CharacterRankingPlayerRowLimit;
+}
 
 interface RankingQueryState {
   leaderboardTab: LeaderboardTab;
   overallRankingsView: OverallRankingsView;
+  selectedCharacterRankingCharacter: string;
   characterRankingPlayerFilterMode: CharacterRankingPlayerFilterMode;
   selectedCharacterRankingPlayerIds: string[];
   characterRankingPlayerRowLimit: CharacterRankingPlayerRowLimit;
@@ -126,6 +145,8 @@ const MATCHES_PAGE_SIZE = 20;
 const MATCH_CONTEXT_PAGE_SIZE = 2;
 const CHARACTER_RANKINGS_BATCH_SIZE = 50;
 const CHARACTER_RANKING_MIN_MATCHES = 5;
+const DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT = 3;
+const RANKING_QUERY_CHARACTER_PARAM = "rankingCharacter";
 const RANKING_QUERY_PLAYER_PARAM = "rankingPlayer";
 const RANKING_QUERY_PLAYER_LIMIT_PARAM = "rankingPlayerLimit";
 const CHARACTER_RANKING_PLAYER_LIMIT_OPTIONS: CharacterRankingPlayerRowLimit[] = [
@@ -136,9 +157,23 @@ const CHARACTER_RANKING_PLAYER_LIMIT_OPTIONS: CharacterRankingPlayerRowLimit[] =
   5,
   "all",
 ];
+const TIER_NAMES: Tier[] = ["S", "A", "B", "C", "D", "E", "F"];
+
+const createEmptyTierList = (): Record<Tier, TierListEntry[]> => ({
+  S: [],
+  A: [],
+  B: [],
+  C: [],
+  D: [],
+  E: [],
+  F: [],
+});
 
 const getUniqueQueryValues = (values: string[]) =>
   Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+
+const getPlayerIdSelectionKey = (playerIds: string[]) =>
+  Array.from(new Set(playerIds)).sort().join("|");
 
 const parseLeaderboardTab = (value: string | null): LeaderboardTab => {
   switch (value) {
@@ -152,6 +187,16 @@ const parseLeaderboardTab = (value: string | null): LeaderboardTab => {
 };
 
 const parseOverallRankingsView = (value: string | null): OverallRankingsView => {
+  switch (value) {
+    case "all-characters":
+    case "best-character":
+      return value;
+    default:
+      return "best-character";
+  }
+};
+
+const parseTierListView = (value: string | null): TierListView => {
   switch (value) {
     case "all-characters":
     case "best-character":
@@ -186,8 +231,10 @@ const parseCharacterRankingPlayerRowLimit = (
       return 4;
     case "5":
       return 5;
-    default:
+    case "all":
       return "all";
+    default:
+      return DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT;
   }
 };
 
@@ -401,11 +448,253 @@ interface SmashTournamentELOProps {
   defaultTab?: "tiers" | "rankings" | "matchups" | "matches" | "players";
 }
 
+const getPlayerDisplayName = ({
+  display_name,
+  name,
+}: {
+  display_name: string | null;
+  name: string;
+}) => display_name || name;
+
+const getPossessiveLabel = (label: string) =>
+  `${label}${label.endsWith("'") ? "s" : "'s"}`;
+
+interface CharacterBasedFiltersProps {
+  description: string;
+  showFilters: boolean;
+  onToggle: () => void;
+  playerOptions: PlayerDropdownPlayer[];
+  selectedPlayerIds: string[];
+  filterMode: CharacterRankingPlayerFilterMode;
+  rowLimit: CharacterRankingPlayerRowLimit;
+  onPlayersChange: (nextSelectedIds: string[]) => void;
+  onFilterModeChange: (nextMode: CharacterRankingPlayerFilterMode) => void;
+  onRowLimitChange: (nextLimit: CharacterRankingPlayerRowLimit) => void;
+  onReset: () => void;
+  hasAppliedFilters: boolean;
+}
+
+const CharacterBasedFilters = memo(
+  ({
+    description,
+    showFilters,
+    onToggle,
+    playerOptions,
+    selectedPlayerIds,
+    filterMode,
+    rowLimit,
+    onPlayersChange,
+    onFilterModeChange,
+    onRowLimitChange,
+    onReset,
+    hasAppliedFilters,
+  }: CharacterBasedFiltersProps) => (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-gray-400">{description}</div>
+        {playerOptions.length > 0 && (
+          <button
+            type="button"
+            onClick={onToggle}
+            className={`inline-flex items-center self-end rounded-lg p-2 transition-colors duration-200 sm:self-auto ${
+              showFilters
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
+            }`}
+            title="Toggle Filters"
+            aria-label="Toggle character-based filters"
+          >
+            <Filter size={20} />
+          </button>
+        )}
+      </div>
+
+      {showFilters && playerOptions.length > 0 && (
+        <div className="relative z-20 overflow-visible rounded-2xl border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-900 to-black/90 p-4 shadow-lg md:p-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-100">
+                  <Filter size={14} />
+                  <span>Filter</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {hasAppliedFilters && (
+                  <button
+                    type="button"
+                    onClick={onReset}
+                    className="rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-stretch">
+              <div className="h-full rounded-xl border border-gray-800 bg-gray-900/70 p-4">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <div className="text-sm font-medium text-gray-300">
+                    {`Players (${selectedPlayerIds.length} selected)`}
+                  </div>
+                  <div className="text-sm font-medium text-gray-300 lg:min-w-[320px]">
+                    Mode
+                  </div>
+
+                  <PlayerDropdown
+                    players={playerOptions}
+                    selectedIds={selectedPlayerIds}
+                    onChange={onPlayersChange}
+                    placeholder="All players"
+                    label="Players"
+                    multiple
+                    hideLabel
+                  />
+
+                  <div className="lg:min-w-[320px]">
+                    <div className="inline-flex min-h-[4.5rem] w-full items-center rounded-[1.75rem] border border-gray-700 bg-gray-950/80 p-1.5 lg:w-auto">
+                      {[
+                        {
+                          value: "include" as const,
+                          label: "Include",
+                          icon: <Check size={18} />,
+                        },
+                        {
+                          value: "exclude" as const,
+                          label: "Exclude",
+                          icon: <X size={18} />,
+                        },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => onFilterModeChange(option.value)}
+                          className={`inline-flex min-h-[3.5rem] flex-1 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-base font-semibold transition-colors lg:flex-none ${
+                            filterMode === option.value
+                              ? "bg-red-600 text-white shadow-[0_0_18px_rgba(220,38,38,0.28)]"
+                              : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                          }`}
+                        >
+                          {option.icon}
+                          <span>{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex h-full flex-col justify-between rounded-xl border border-gray-800 bg-gray-900/70 p-4">
+                <label className="mb-3 block text-sm font-medium text-gray-300">
+                  Rows Per Player
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {CHARACTER_RANKING_PLAYER_LIMIT_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => onRowLimitChange(option)}
+                      className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                        rowLimit === option
+                          ? "bg-red-600 text-white shadow-[0_0_18px_rgba(220,38,38,0.28)]"
+                          : "border border-gray-700 bg-gray-950/80 text-gray-300 hover:bg-gray-800 hover:text-white"
+                      }`}
+                    >
+                      {option === "all" ? "All" : option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+);
+
+CharacterBasedFilters.displayName = "CharacterBasedFilters";
+
+interface CharacterRankingSearchPanelProps {
+  availableCharacters: string[];
+  selectedCharacter: string;
+  disabled: boolean;
+  onCharacterChange: (nextCharacter: string) => void;
+  onClear: () => void;
+}
+
+const CharacterRankingSearchPanel = memo(
+  ({
+    availableCharacters,
+    selectedCharacter,
+    disabled,
+    onCharacterChange,
+    onClear,
+  }: CharacterRankingSearchPanelProps) => {
+    const hasSelection = selectedCharacter.length > 0;
+
+    return (
+      <div className="rounded-2xl border border-gray-700 bg-gray-800/90 p-5 shadow-lg">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">
+                Character Search
+              </div>
+              <h3 className="mt-1 text-2xl font-bold text-white">
+                {hasSelection
+                  ? `Who is the best ${selectedCharacter} player?`
+                  : "Who is the best character player?"}
+              </h3>
+              <p className="mt-2 text-sm text-gray-400">
+                Search a Smash character to rank players by character ELO.
+                Needs minimum {CHARACTER_RANKING_MIN_MATCHES} matches to show.
+              </p>
+            </div>
+
+            {hasSelection && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-600 bg-gray-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
+              >
+                <X size={14} />
+                Clear
+              </button>
+            )}
+          </div>
+
+          <CharacterDropdown
+            characters={availableCharacters}
+            selectedValues={selectedCharacter ? [selectedCharacter] : []}
+            onChange={(nextSelectedValues) =>
+              onCharacterChange(nextSelectedValues[0] || "")
+            }
+            disabled={disabled}
+            label="Character"
+            placeholder={
+              disabled
+                ? "Character rankings are loading"
+                : "Search a Smash character"
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+);
+
+CharacterRankingSearchPanel.displayName = "CharacterRankingSearchPanel";
+
 export default function SmashTournamentELO({
   defaultTab = "rankings",
 }: SmashTournamentELOProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isCharacterBasedQueryPage =
+    defaultTab === "rankings" || defaultTab === "tiers";
   const leaderboardTab =
     defaultTab === "rankings"
       ? parseLeaderboardTab(searchParams.get("leaderboard"))
@@ -414,22 +703,30 @@ export default function SmashTournamentELO({
     defaultTab === "rankings"
       ? parseOverallRankingsView(searchParams.get("overallView"))
       : "best-character";
-  const characterRankingPlayerFilterMode =
+  const selectedCharacterRankingCharacter =
     defaultTab === "rankings"
+      ? (searchParams.get(RANKING_QUERY_CHARACTER_PARAM) || "").trim()
+      : "";
+  const tierListView =
+    defaultTab === "tiers"
+      ? parseTierListView(searchParams.get("tierView"))
+      : "best-character";
+  const characterRankingPlayerFilterMode =
+    isCharacterBasedQueryPage
       ? parseCharacterRankingPlayerFilterMode(
           searchParams.get("rankingPlayerMode")
         )
       : "include";
   const rankingPlayerQueryValues =
-    defaultTab === "rankings"
+    isCharacterBasedQueryPage
       ? getUniqueQueryValues(searchParams.getAll(RANKING_QUERY_PLAYER_PARAM))
       : [];
   const characterRankingPlayerRowLimit =
-    defaultTab === "rankings"
+    isCharacterBasedQueryPage
       ? parseCharacterRankingPlayerRowLimit(
           searchParams.get(RANKING_QUERY_PLAYER_LIMIT_PARAM)
         )
-      : "all";
+      : DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT;
 
   // State management
   const [players, setPlayers] = useState<ExtendedPlayer[]>([]);
@@ -483,6 +780,8 @@ export default function SmashTournamentELO({
   const [autoRefreshDisabled, setAutoRefreshDisabled] =
     useState<boolean>(false);
   const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [showCharacterBasedFilters, setShowCharacterBasedFilters] =
+    useState<boolean>(false);
   const [visibleCharacterRankingsCount, setVisibleCharacterRankingsCount] =
     useState<number>(CHARACTER_RANKINGS_BATCH_SIZE);
   const [showUtcTime, setShowUtcTime] = useState<boolean>(false);
@@ -494,12 +793,36 @@ export default function SmashTournamentELO({
   );
   const characterRankingsSentinelRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledCharacterRankingsRef = useRef(false);
+  const eligibleCharacterRankingPlayerIds = new Set(
+    characterRankings
+      .filter(
+        (characterRanking) =>
+          characterRanking.matches >= CHARACTER_RANKING_MIN_MATCHES
+      )
+      .map((characterRanking) => String(characterRanking.player_id))
+  );
+  const defaultCharacterBasedPlayerIds = [...players]
+    .filter((player) => !player.inactive && player.is_ranked)
+    .filter(
+      (player) =>
+        eligibleCharacterRankingPlayerIds.size === 0 ||
+        eligibleCharacterRankingPlayerIds.has(String(player.id))
+    )
+    .sort((a, b) => b.elo - a.elo)
+    .map((player) => String(player.id));
+  const resolvedCharacterRankingPlayerIds = isCharacterBasedQueryPage
+    ? resolvePlayerQueryValuesToIds(rankingPlayerQueryValues, players)
+    : [];
   const selectedCharacterRankingPlayerIds =
-    defaultTab === "rankings"
-      ? resolvePlayerQueryValuesToIds(rankingPlayerQueryValues, players)
-      : [];
-  const selectedCharacterRankingPlayerIdsKey =
-    selectedCharacterRankingPlayerIds.join("|");
+    rankingPlayerQueryValues.length > 0
+      ? resolvedCharacterRankingPlayerIds
+      : defaultCharacterBasedPlayerIds;
+  const selectedCharacterRankingPlayerIdsKey = getPlayerIdSelectionKey(
+    selectedCharacterRankingPlayerIds
+  );
+  const defaultCharacterBasedPlayerIdsKey = getPlayerIdSelectionKey(
+    defaultCharacterBasedPlayerIds
+  );
 
   // Helper function to validate country code
   const isValidCountryCode = (countryCode: string | null): boolean => {
@@ -578,6 +901,7 @@ export default function SmashTournamentELO({
     defaultTab,
     leaderboardTab,
     overallRankingsView,
+    selectedCharacterRankingCharacter,
     characterRankingPlayerFilterMode,
     selectedCharacterRankingPlayerIdsKey,
     characterRankingPlayerRowLimit,
@@ -586,8 +910,11 @@ export default function SmashTournamentELO({
   useEffect(() => {
     const shouldAutoScroll =
       defaultTab === "rankings" &&
-      leaderboardTab === "character" &&
-      selectedCharacterRankingPlayerIds.length > 0 &&
+      ((leaderboardTab === "character" &&
+        selectedCharacterRankingCharacter.length > 0) ||
+        (leaderboardTab === "overall" &&
+          overallRankingsView === "best-character" &&
+          rankingPlayerQueryValues.length > 0)) &&
       !loading &&
       !loadingCharacterRankings &&
       hasFetchedCharacterRankings;
@@ -614,7 +941,9 @@ export default function SmashTournamentELO({
   }, [
     defaultTab,
     leaderboardTab,
-    selectedCharacterRankingPlayerIds.length,
+    overallRankingsView,
+    selectedCharacterRankingCharacter,
+    rankingPlayerQueryValues.length,
     loading,
     loadingCharacterRankings,
     hasFetchedCharacterRankings,
@@ -651,7 +980,8 @@ export default function SmashTournamentELO({
 
   const handleViewTopCharacters = (playerId: number) => {
     const params = new URLSearchParams();
-    params.set("leaderboard", "character");
+    params.set("overallView", "best-character");
+    params.set(RANKING_QUERY_PLAYER_LIMIT_PARAM, "all");
     params.append(
       RANKING_QUERY_PLAYER_PARAM,
       serializePlayerIdToQueryValue(playerId, players)
@@ -659,12 +989,67 @@ export default function SmashTournamentELO({
     router.push(`/?${params.toString()}`);
   };
 
+  const handleCharacterRankingBadgeClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    characterName: string
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const params = new URLSearchParams();
+    params.set("leaderboard", "character");
+    params.set(RANKING_QUERY_CHARACTER_PARAM, characterName);
+    router.push(`/?${params.toString()}`);
+  };
+
   const rankingQueryState: RankingQueryState = {
     leaderboardTab,
     overallRankingsView,
+    selectedCharacterRankingCharacter,
     characterRankingPlayerFilterMode,
     selectedCharacterRankingPlayerIds,
     characterRankingPlayerRowLimit,
+  };
+
+  const shouldPersistCharacterBasedFilters = (
+    currentLeaderboard: LeaderboardTab,
+    currentOverallView: OverallRankingsView
+  ) =>
+    currentLeaderboard === "character" ||
+    (currentLeaderboard === "overall" && currentOverallView === "best-character");
+
+  const appendCharacterBasedFilterParams = (
+    params: URLSearchParams,
+    state: CharacterBasedFilterQueryState
+  ) => {
+    if (state.characterRankingPlayerFilterMode !== "include") {
+      params.set(
+        "rankingPlayerMode",
+        state.characterRankingPlayerFilterMode
+      );
+    }
+
+    if (
+      getPlayerIdSelectionKey(state.selectedCharacterRankingPlayerIds) !==
+      defaultCharacterBasedPlayerIdsKey
+    ) {
+      serializePlayerIdsToQueryValues(
+        state.selectedCharacterRankingPlayerIds,
+        players
+      ).forEach((playerQueryValue) => {
+        params.append(RANKING_QUERY_PLAYER_PARAM, playerQueryValue);
+      });
+    }
+
+    if (
+      state.characterRankingPlayerRowLimit !==
+      DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT
+    ) {
+      params.set(
+        RANKING_QUERY_PLAYER_LIMIT_PARAM,
+        String(state.characterRankingPlayerRowLimit)
+      );
+    }
   };
 
   const updateRankingsURL = (nextState: Partial<RankingQueryState>) => {
@@ -675,6 +1060,10 @@ export default function SmashTournamentELO({
     const mergedState: RankingQueryState = {
       ...rankingQueryState,
       ...nextState,
+      selectedCharacterRankingCharacter:
+        nextState.selectedCharacterRankingCharacter !== undefined
+          ? nextState.selectedCharacterRankingCharacter.trim()
+          : rankingQueryState.selectedCharacterRankingCharacter,
       selectedCharacterRankingPlayerIds: nextState.selectedCharacterRankingPlayerIds
         ? getUniqueQueryValues(nextState.selectedCharacterRankingPlayerIds)
         : rankingQueryState.selectedCharacterRankingPlayerIds,
@@ -683,6 +1072,7 @@ export default function SmashTournamentELO({
 
     params.delete("leaderboard");
     params.delete("overallView");
+    params.delete(RANKING_QUERY_CHARACTER_PARAM);
     params.delete("rankingPlayerMode");
     params.delete(RANKING_QUERY_PLAYER_PARAM);
     params.delete(RANKING_QUERY_PLAYER_LIMIT_PARAM);
@@ -698,44 +1088,111 @@ export default function SmashTournamentELO({
       params.set("overallView", mergedState.overallRankingsView);
     }
 
-    if (mergedState.leaderboardTab === "character") {
-      if (mergedState.characterRankingPlayerFilterMode !== "include") {
-        params.set(
-          "rankingPlayerMode",
-          mergedState.characterRankingPlayerFilterMode
-        );
-      }
+    if (
+      mergedState.leaderboardTab === "character" &&
+      mergedState.selectedCharacterRankingCharacter
+    ) {
+      params.set(
+        RANKING_QUERY_CHARACTER_PARAM,
+        mergedState.selectedCharacterRankingCharacter
+      );
+    }
 
-      serializePlayerIdsToQueryValues(
-        mergedState.selectedCharacterRankingPlayerIds,
-        players
-      ).forEach((playerQueryValue) => {
-        params.append(RANKING_QUERY_PLAYER_PARAM, playerQueryValue);
+    if (
+      shouldPersistCharacterBasedFilters(
+        mergedState.leaderboardTab,
+        mergedState.overallRankingsView
+      )
+    ) {
+      appendCharacterBasedFilterParams(params, {
+        characterRankingPlayerFilterMode:
+          mergedState.characterRankingPlayerFilterMode,
+        selectedCharacterRankingPlayerIds:
+          mergedState.selectedCharacterRankingPlayerIds,
+        characterRankingPlayerRowLimit:
+          mergedState.characterRankingPlayerRowLimit,
       });
-
-      if (mergedState.characterRankingPlayerRowLimit !== "all") {
-        params.set(
-          RANKING_QUERY_PLAYER_LIMIT_PARAM,
-          String(mergedState.characterRankingPlayerRowLimit)
-        );
-      }
     }
 
     const queryString = params.toString();
     router.replace(queryString ? `/?${queryString}` : "/");
   };
 
+  const updateTierListURL = (
+    nextView: TierListView,
+    nextFilterState?: Partial<CharacterBasedFilterQueryState>
+  ) => {
+    if (defaultTab !== "tiers") {
+      return;
+    }
+
+    const mergedFilterState: CharacterBasedFilterQueryState = {
+      characterRankingPlayerFilterMode:
+        nextFilterState?.characterRankingPlayerFilterMode ??
+        characterRankingPlayerFilterMode,
+      selectedCharacterRankingPlayerIds:
+        nextFilterState?.selectedCharacterRankingPlayerIds
+          ? getUniqueQueryValues(nextFilterState.selectedCharacterRankingPlayerIds)
+          : selectedCharacterRankingPlayerIds,
+      characterRankingPlayerRowLimit:
+        nextFilterState?.characterRankingPlayerRowLimit ??
+        characterRankingPlayerRowLimit,
+    };
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("rankingPlayerMode");
+    params.delete(RANKING_QUERY_PLAYER_PARAM);
+    params.delete(RANKING_QUERY_PLAYER_LIMIT_PARAM);
+
+    if (nextView === "best-character") {
+      params.delete("tierView");
+      appendCharacterBasedFilterParams(params, mergedFilterState);
+    } else {
+      params.set("tierView", nextView);
+    }
+
+    const queryString = params.toString();
+    router.replace(queryString ? `/tierlist?${queryString}` : "/tierlist");
+  };
+
+  const updateCharacterBasedFilters = (
+    nextState: Partial<CharacterBasedFilterQueryState>
+  ) => {
+    if (defaultTab === "rankings") {
+      updateRankingsURL(nextState);
+      return;
+    }
+
+    if (defaultTab === "tiers") {
+      updateTierListURL(tierListView, nextState);
+    }
+  };
+
   const handleCharacterRankingPlayerFilterChange = (selected: string[]) => {
-    updateRankingsURL({
+    updateCharacterBasedFilters({
       selectedCharacterRankingPlayerIds: selected,
     });
   };
 
-  const clearCharacterRankingPlayerFilters = () => {
+  const handleCharacterRankingCharacterChange = (nextCharacter: string) => {
     updateRankingsURL({
+      leaderboardTab: "character",
+      selectedCharacterRankingCharacter: nextCharacter,
+    });
+  };
+
+  const clearCharacterRankingCharacter = () => {
+    updateRankingsURL({
+      leaderboardTab: "character",
+      selectedCharacterRankingCharacter: "",
+    });
+  };
+
+  const clearCharacterRankingPlayerFilters = () => {
+    updateCharacterBasedFilters({
       characterRankingPlayerFilterMode: "include",
-      selectedCharacterRankingPlayerIds: [],
-      characterRankingPlayerRowLimit: "all",
+      selectedCharacterRankingPlayerIds: defaultCharacterBasedPlayerIds,
+      characterRankingPlayerRowLimit:
+        DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT,
     });
   };
 
@@ -1766,6 +2223,13 @@ export default function SmashTournamentELO({
     (characterRanking) =>
       characterRanking.matches >= CHARACTER_RANKING_MIN_MATCHES
   );
+  const characterRankingCharacterOptions = Array.from(
+    new Set(
+      eligibleCharacterRankings.map(
+        (characterRanking) => characterRanking.character_name
+      )
+    )
+  ).sort((a, b) => a.localeCompare(b));
   const bestCharacterRankings: CharacterRanking[] = [];
   const seenBestCharacterPlayers = new Set<number>();
 
@@ -1833,9 +2297,10 @@ export default function SmashTournamentELO({
           });
         })();
   const hasCharacterRankingPlayerFilters =
-    selectedCharacterRankingPlayerIds.length > 0;
+    selectedCharacterRankingPlayerIdsKey !== defaultCharacterBasedPlayerIdsKey;
   const hasCharacterRankingRowLimit =
-    characterRankingPlayerRowLimit !== "all";
+    characterRankingPlayerRowLimit !==
+    DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT;
   const hasCharacterRankingControlsApplied =
     hasCharacterRankingPlayerFilters ||
     hasCharacterRankingRowLimit ||
@@ -1866,24 +2331,7 @@ export default function SmashTournamentELO({
 
     return orderedRankedPlayers;
   })();
-  const activeBestCharacterRankings = bestCharacterRankings.filter(
-    (characterRanking) => !playersById.get(characterRanking.player_id)?.inactive
-  );
-  const bestCharacterTierThresholds = calculateTierThresholds(
-    activeBestCharacterRankings.length > 0
-      ? activeBestCharacterRankings
-      : bestCharacterRankings
-  );
-  const tierList: Record<Tier, BestCharacterTierEntry[]> = {
-    S: [],
-    A: [],
-    B: [],
-    C: [],
-    D: [],
-    E: [],
-    F: [],
-  };
-  const bestCharacterTierEntries = bestCharacterRankings.filter(
+  const characterBasedTierEntries = limitedCharacterRankings.filter(
     (characterRanking) => {
       const player = playersById.get(characterRanking.player_id);
       const daysAgo = getDaysAgo(
@@ -1893,17 +2341,82 @@ export default function SmashTournamentELO({
       return daysAgo !== null && daysAgo < 90;
     }
   );
+  const characterBasedTierThresholds = calculateTierThresholds(
+    characterBasedTierEntries.length > 0
+      ? characterBasedTierEntries
+      : limitedCharacterRankings
+  );
+  const characterBasedTierList = createEmptyTierList();
 
-  bestCharacterTierEntries.forEach((characterRanking) => {
+  characterBasedTierEntries.forEach((characterRanking) => {
     const player = playersById.get(characterRanking.player_id);
-    const tier = getTier(characterRanking.elo, bestCharacterTierThresholds);
+    const tier = getTier(characterRanking.elo, characterBasedTierThresholds);
 
-    tierList[tier].push({
-      ...characterRanking,
+    characterBasedTierList[tier].push({
+      key: characterRanking.id,
+      player_id: characterRanking.player_id,
+      name: characterRanking.name,
+      display_name: characterRanking.display_name,
+      picture: characterRanking.picture ?? null,
+      country: characterRanking.country ?? null,
+      character_name: characterRanking.character_name,
+      characterLabel: "Character Based",
+      elo: characterRanking.elo,
+      current_win_streak: characterRanking.current_win_streak,
       inactive: player?.inactive ?? false,
-      last_match_date: player?.last_match_date ?? characterRanking.last_match_date,
+      showInactiveOverlay: player?.inactive ?? false,
     });
   });
+  const allCharactersTierList = createEmptyTierList();
+
+  rankedPlayers.forEach((player) => {
+    const tier = getTier(player.elo, tierThresholds);
+
+    allCharactersTierList[tier].push({
+      key: `player-${player.id}`,
+      player_id: player.id,
+      name: player.name,
+      display_name: player.display_name,
+      picture: player.picture ?? null,
+      country: player.country ?? null,
+      character_name: player.main_character ?? null,
+      characterLabel: "Main character",
+      elo: player.elo,
+      current_win_streak: player.current_win_streak,
+      inactive: false,
+      showInactiveOverlay: false,
+    });
+  });
+  const isAllCharactersTierView = tierListView === "all-characters";
+  const displayedTierList = isAllCharactersTierView
+    ? allCharactersTierList
+    : characterBasedTierList;
+  const tierListSubtitle = isAllCharactersTierView
+    ? "Based on each player's overall ELO"
+    : "Based on filtered character ELO rankings";
+  const tierListDescription = isAllCharactersTierView
+    ? "Tiered by overall player ELO using their full match history."
+    : "Tiered by filtered character ELO rows, with at least 5 games on that character.";
+  const tierListControlOptions = [
+    {
+      id: "all-characters" as const,
+      label: "Overall",
+      count: rankedPlayers.length,
+    },
+    {
+      id: "best-character" as const,
+      label: "Character Based",
+      count: characterBasedTierEntries.length,
+    },
+  ];
+  const characterBasedRankingsDescription =
+    "Character-based rankings filtered by player and rows per player, with at least 5 games on that character.";
+  const selectedCharacterRankings = selectedCharacterRankingCharacter
+    ? eligibleCharacterRankings.filter(
+        (characterRanking) =>
+          characterRanking.character_name === selectedCharacterRankingCharacter
+      )
+    : [];
 
   const isOverallLeaderboard = leaderboardTab === "overall";
   const isOverallAllCharactersView =
@@ -1911,13 +2424,17 @@ export default function SmashTournamentELO({
   const isOverallBestCharacterView =
     isOverallLeaderboard && overallRankingsView === "best-character";
   const isCharacterLeaderboard = leaderboardTab === "character";
+  const hasSelectedCharacterRankingCharacter =
+    selectedCharacterRankingCharacter.length > 0;
+  const shouldShowCharacterSearchResults =
+    isCharacterLeaderboard && hasSelectedCharacterRankingCharacter;
   const isCharacterRowsLeaderboard =
-    isCharacterLeaderboard || isOverallBestCharacterView;
+    shouldShowCharacterSearchResults || isOverallBestCharacterView;
   const displayedCharacterRankings = isOverallBestCharacterView
-    ? bestCharacterRankings
-    : isCharacterLeaderboard
     ? limitedCharacterRankings
-    : characterRankings;
+    : shouldShowCharacterSearchResults
+    ? selectedCharacterRankings
+    : [];
   const visibleCharacterRankings = isCharacterRowsLeaderboard
     ? displayedCharacterRankings.slice(0, visibleCharacterRankingsCount)
     : [];
@@ -1931,6 +2448,8 @@ export default function SmashTournamentELO({
     ? rankedPlayers.length
     : isCharacterRowsLeaderboard
     ? displayedCharacterRankings.length
+    : isCharacterLeaderboard
+    ? 0
     : leaderboardTab === "unranked"
     ? unrankedPlayers.length
     : inactivePlayers.length;
@@ -2239,7 +2758,7 @@ export default function SmashTournamentELO({
                             {tab.id === "overall"
                               ? rankedPlayers.length
                               : tab.id === "character"
-                              ? eligibleCharacterRankings.length
+                              ? characterRankingCharacterOptions.length
                               : tab.id === "unranked"
                               ? unrankedPlayers.length
                               : inactivePlayers.length}
@@ -2253,13 +2772,13 @@ export default function SmashTournamentELO({
                           {[
                             {
                               id: "all-characters",
-                              label: "All Characters",
+                              label: "Overall",
                               count: rankedPlayers.length,
                             },
                             {
                               id: "best-character",
-                              label: "Best Character",
-                              count: bestCharacterRankings.length,
+                              label: "Character Based",
+                              count: limitedCharacterRankings.length,
                             },
                           ].map((tab) => (
                             <button
@@ -2283,151 +2802,60 @@ export default function SmashTournamentELO({
                             </button>
                           ))}
                         </div>
-                        <div className="mt-2 text-sm text-gray-400">
-                          {overallRankingsView === "all-characters"
-                            ? "Overall player ELO using their full match history across all characters."
-                            : "One row per player using only their highest-ranked memoized character ELO, with at least 5 games on that character."}
-                        </div>
+                        {overallRankingsView === "all-characters" ? (
+                          <div className="mt-2 text-sm text-gray-400">
+                            Overall player ELO using their full match history.
+                          </div>
+                        ) : (
+                          <div className="mt-4">
+                            <CharacterBasedFilters
+                              description={characterBasedRankingsDescription}
+                              showFilters={showCharacterBasedFilters}
+                              onToggle={() =>
+                                setShowCharacterBasedFilters((current) => !current)
+                              }
+                              playerOptions={characterRankingPlayerOptions}
+                              selectedPlayerIds={
+                                selectedCharacterRankingPlayerIds
+                              }
+                              filterMode={characterRankingPlayerFilterMode}
+                              rowLimit={characterRankingPlayerRowLimit}
+                              onPlayersChange={
+                                handleCharacterRankingPlayerFilterChange
+                              }
+                              onFilterModeChange={(nextMode) =>
+                                updateCharacterBasedFilters({
+                                  characterRankingPlayerFilterMode: nextMode,
+                                })
+                              }
+                              onRowLimitChange={(nextLimit) =>
+                                updateCharacterBasedFilters({
+                                  characterRankingPlayerRowLimit: nextLimit,
+                                })
+                              }
+                              onReset={clearCharacterRankingPlayerFilters}
+                              hasAppliedFilters={
+                                hasCharacterRankingControlsApplied
+                              }
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                     {leaderboardTab === "character" && (
-                      <div className="mt-4 space-y-3">
-                        {hasFetchedCharacterRankings &&
-                          characterRankingPlayerOptions.length > 0 && (
-                            <div className="relative z-20 overflow-visible rounded-2xl border border-gray-700 bg-gradient-to-br from-gray-900 via-gray-900 to-black/90 p-4 shadow-lg md:p-5">
-                                <div className="flex flex-col gap-4">
-                                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-100">
-                                      <Filter size={14} />
-                                      <span>Filter</span>
-                                    </div>
-                                    <div className="inline-flex items-center rounded-full border border-gray-700 bg-gray-950/80 px-3 py-1 text-sm font-semibold text-white">
-                                      <span>Rows</span>
-                                      <span className="ml-2">
-                                        {limitedCharacterRankings.length}
-                                      </span>
-                                      <span className="ml-1 text-gray-500">
-                                        / {eligibleCharacterRankings.length}
-                                      </span>
-                                    </div>
-                                    {hasCharacterRankingRowLimit && (
-                                      <div className="inline-flex items-center rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-sm font-medium text-yellow-100">
-                                        Per player{" "}
-                                        {characterRankingPlayerRowLimit}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {hasCharacterRankingControlsApplied && (
-                                      <button
-                                        type="button"
-                                        onClick={clearCharacterRankingPlayerFilters}
-                                        className="rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700"
-                                      >
-                                        Reset
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-stretch">
-                                  <div className="h-full rounded-xl border border-gray-800 bg-gray-900/70 p-4">
-                                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                                      <div className="text-sm font-medium text-gray-300">
-                                        {`Players (${selectedCharacterRankingPlayerIds.length} selected)`}
-                                      </div>
-                                      <div className="text-sm font-medium text-gray-300 lg:min-w-[320px]">
-                                        Mode
-                                      </div>
-
-                                      <PlayerDropdown
-                                        players={characterRankingPlayerOptions}
-                                        selectedIds={
-                                          selectedCharacterRankingPlayerIds
-                                        }
-                                        onChange={
-                                          handleCharacterRankingPlayerFilterChange
-                                        }
-                                        placeholder="All players"
-                                        label="Players"
-                                        multiple
-                                        hideLabel
-                                      />
-
-                                      <div className="lg:min-w-[320px]">
-                                        <div className="inline-flex min-h-[4.5rem] w-full items-center rounded-[1.75rem] border border-gray-700 bg-gray-950/80 p-1.5 lg:w-auto">
-                                          {[
-                                            {
-                                              value: "include" as const,
-                                              label: "Include",
-                                              icon: <Check size={18} />,
-                                            },
-                                            {
-                                              value: "exclude" as const,
-                                              label: "Exclude",
-                                              icon: <X size={18} />,
-                                            },
-                                          ].map((option) => (
-                                            <button
-                                              key={option.value}
-                                              type="button"
-                                              onClick={() =>
-                                                updateRankingsURL({
-                                                  characterRankingPlayerFilterMode:
-                                                    option.value,
-                                                })
-                                              }
-                                              className={`inline-flex min-h-[3.5rem] flex-1 items-center justify-center gap-2 rounded-2xl px-6 py-3 text-base font-semibold transition-colors lg:flex-none ${
-                                                characterRankingPlayerFilterMode ===
-                                                option.value
-                                                  ? "bg-red-600 text-white shadow-[0_0_18px_rgba(220,38,38,0.28)]"
-                                                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                                              }`}
-                                            >
-                                              {option.icon}
-                                              <span>{option.label}</span>
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex h-full flex-col justify-between rounded-xl border border-gray-800 bg-gray-900/70 p-4">
-                                    <label className="mb-3 block text-sm font-medium text-gray-300">
-                                      Rows Per Player
-                                    </label>
-                                    <div className="flex flex-wrap gap-2">
-                                      {CHARACTER_RANKING_PLAYER_LIMIT_OPTIONS.map(
-                                        (option) => (
-                                          <button
-                                            key={option}
-                                            type="button"
-                                            onClick={() =>
-                                              updateRankingsURL({
-                                                characterRankingPlayerRowLimit:
-                                                  option,
-                                              })
-                                            }
-                                            className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
-                                              characterRankingPlayerRowLimit ===
-                                              option
-                                                ? "bg-red-600 text-white shadow-[0_0_18px_rgba(220,38,38,0.28)]"
-                                                : "border border-gray-700 bg-gray-950/80 text-gray-300 hover:bg-gray-800 hover:text-white"
-                                            }`}
-                                          >
-                                            {option === "all" ? "All" : option}
-                                          </button>
-                                        )
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                      <div className="mt-4">
+                        <CharacterRankingSearchPanel
+                          availableCharacters={characterRankingCharacterOptions}
+                          selectedCharacter={selectedCharacterRankingCharacter}
+                          disabled={
+                            loadingCharacterRankings ||
+                            !hasFetchedCharacterRankings
+                          }
+                          onCharacterChange={
+                            handleCharacterRankingCharacterChange
+                          }
+                          onClear={clearCharacterRankingCharacter}
+                        />
                       </div>
                     )}
                     {leaderboardTab === "unranked" && (
@@ -2452,6 +2880,28 @@ export default function SmashTournamentELO({
                         Add some fighters to begin the tournament
                       </p>
                     </div>
+                  ) : isCharacterLeaderboard &&
+                    !hasSelectedCharacterRankingCharacter ? (
+                    <div className="p-6">
+                      <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-16 text-center text-gray-400">
+                        <p className="text-2xl font-bold text-white">
+                          Choose a character to unlock the rankings.
+                        </p>
+                        <p className="mt-2 text-lg">
+                          Search any Smash character to see who has the highest
+                          character ELO, with at least{" "}
+                          {CHARACTER_RANKING_MIN_MATCHES} recorded matches on
+                          that character.
+                        </p>
+                        {(loadingCharacterRankings ||
+                          !hasFetchedCharacterRankings) && (
+                          <div className="mt-6 flex items-center justify-center gap-3 text-sm text-gray-500">
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-yellow-500"></div>
+                            <span>Loading character rankings...</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ) : isCharacterRowsLeaderboard &&
                     (loadingCharacterRankings || !hasFetchedCharacterRankings) ? (
                     <div className="flex justify-center items-center h-64">
@@ -2466,13 +2916,13 @@ export default function SmashTournamentELO({
                     <div className="text-gray-400 text-center py-16 px-6">
                       <p className="text-2xl font-bold">
                         {isOverallBestCharacterView
-                          ? "No best-character rankings yet."
-                          : "No character rankings yet."}
+                          ? "No character-based rankings yet."
+                          : `No ${selectedCharacterRankingCharacter} rankings yet.`}
                       </p>
                       <p className="mt-2 text-lg">
                         {isOverallBestCharacterView
-                          ? "Best-character rows appear after the capture pipeline has written persisted character ELOs, once a player has at least 5 games on a character."
-                          : "Character rows appear after the capture pipeline has written persisted character ELOs, once a player has at least 5 games on that character."}
+                          ? "Character-based rows appear after the capture pipeline has written persisted character ELOs, once a player has at least 5 games on that character."
+                          : `No player has at least ${CHARACTER_RANKING_MIN_MATCHES} recorded matches on ${selectedCharacterRankingCharacter} yet.`}
                       </p>
                     </div>
                   ) : (
@@ -2496,7 +2946,7 @@ export default function SmashTournamentELO({
                                 Flag
                               </th>
                               <th className="px-2 py-3 md:px-4 md:py-6 text-left text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider">
-                                Player
+                                {isCharacterRowsLeaderboard ? "Entry" : "Player"}
                               </th>
                               {leaderboardTab !== "unranked" && (
                                 <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-16">
@@ -2515,6 +2965,10 @@ export default function SmashTournamentELO({
                                     leaderboardTab === "unranked"
                                       ? "w-24 md:w-32"
                                       : "w-16"
+                                  } ${
+                                    isCharacterRowsLeaderboard
+                                      ? "rounded-tr-xl"
+                                      : ""
                                   }`}
                                 >
                                   {leaderboardTab === "unranked"
@@ -2522,13 +2976,11 @@ export default function SmashTournamentELO({
                                     : "Tier"}
                                 </th>
                               )}
-                              <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider rounded-tr-xl w-16">
-                                {isCharacterRowsLeaderboard
-                                  ? isOverallBestCharacterView
-                                    ? "Best Character"
-                                    : "Character"
-                                  : "Main"}
-                              </th>
+                              {!isCharacterRowsLeaderboard && (
+                                <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider rounded-tr-xl w-16">
+                                  Main
+                                </th>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="bg-gray-900 divide-y divide-gray-800">
@@ -2539,6 +2991,11 @@ export default function SmashTournamentELO({
                                     index,
                                     currentCharacterRankings
                                   ) => {
+                                    const playerDisplayName =
+                                      getPlayerDisplayName(characterRanking);
+                                    const possessiveCharacterLabel = `${getPossessiveLabel(
+                                      playerDisplayName
+                                    )} ${characterRanking.character_name}`;
                                     const isLast =
                                       index ===
                                       currentCharacterRankings.length - 1;
@@ -2589,30 +3046,62 @@ export default function SmashTournamentELO({
                                             </span>
                                           )}
                                         </td>
-                                        <td className="px-2 py-3 md:px-6 md:py-8 whitespace-nowrap text-sm md:text-2xl font-bold text-white">
+                                        <td className="px-2 py-3 md:px-6 md:py-8 text-white">
                                           <div
-                                            className="flex items-center space-x-2 md:space-x-4 cursor-pointer hover:opacity-80 transition-opacity"
+                                            className="flex min-w-0 items-center gap-2 md:gap-4 cursor-pointer hover:opacity-80 transition-opacity"
                                             onClick={() =>
                                               handlePlayerClick(
                                                 characterRanking.player_id
                                               )
                                             }
+                                            title={possessiveCharacterLabel}
                                           >
-                                            <ProfilePicture
-                                              player={characterRanking}
-                                              size="md"
-                                            />
-                                            <div className="flex items-center">
-                                              <span>
-                                                {characterRanking.display_name ||
-                                                  characterRanking.name}
-                                              </span>
-                                              <FireStreak
-                                                streak={
-                                                  characterRanking.current_win_streak ||
-                                                  0
-                                                }
+                                            <div className="shrink-0">
+                                              <ProfilePicture
+                                                player={characterRanking}
+                                                size="md"
                                               />
+                                            </div>
+                                            <div className="min-w-0">
+                                              <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3 leading-tight">
+                                                <span className="text-base font-bold text-white md:text-2xl">
+                                                  {getPossessiveLabel(
+                                                    playerDisplayName
+                                                  )}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={(event) =>
+                                                    handleCharacterRankingBadgeClick(
+                                                      event,
+                                                      characterRanking.character_name
+                                                    )
+                                                  }
+                                                  className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-gray-700/80 bg-gray-800/70 px-2.5 py-1 text-sm font-semibold text-gray-200 shadow-lg transition-colors hover:border-yellow-400/70 hover:bg-gray-700/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/70 md:px-3 md:py-1.5 md:text-xl"
+                                                  title={`Show ${possessiveCharacterLabel} in Character Rankings`}
+                                                  aria-label={`Show ${possessiveCharacterLabel} in Character Rankings`}
+                                                >
+                                                  <CharacterProfilePicture
+                                                    characterName={
+                                                      characterRanking.character_name
+                                                    }
+                                                    size="sm"
+                                                    className="h-6 w-6 md:h-8 md:w-8 shrink-0 border border-gray-200 shadow-sm"
+                                                    alt={`${characterRanking.character_name} portrait`}
+                                                  />
+                                                  <span className="truncate">
+                                                    {
+                                                      characterRanking.character_name
+                                                    }
+                                                  </span>
+                                                </button>
+                                                <FireStreak
+                                                  streak={
+                                                    characterRanking.current_win_streak ||
+                                                    0
+                                                  }
+                                                />
+                                              </div>
                                             </div>
                                           </div>
                                         </td>
@@ -2627,7 +3116,11 @@ export default function SmashTournamentELO({
                                             {characterRanking.elo}
                                           </span>
                                         </td>
-                                        <td className="px-1 py-3 md:px-2 md:py-8 text-center whitespace-nowrap">
+                                        <td
+                                          className={`px-1 py-3 md:px-2 md:py-8 text-center whitespace-nowrap ${
+                                            isLast ? "rounded-br-xl" : ""
+                                          }`}
+                                        >
                                           <span
                                             className={`w-8 h-8 md:w-12 md:h-12 inline-flex items-center justify-center text-xs md:text-lg font-bold rounded-full ${getTierBadgeColor(
                                               getTier(
@@ -2641,24 +3134,6 @@ export default function SmashTournamentELO({
                                               characterTierThresholds
                                             )}
                                           </span>
-                                        </td>
-                                        <td
-                                          className={`px-2 py-3 md:px-4 md:py-8 ${
-                                            isLast ? "rounded-br-xl" : ""
-                                          }`}
-                                        >
-                                          <div className="flex items-center justify-center md:justify-start gap-2">
-                                            <CharacterProfilePicture
-                                              characterName={
-                                                characterRanking.character_name
-                                              }
-                                              size="sm"
-                                              className="border-2 border-gray-300 w-8 h-8 md:w-12 md:h-12 flex-shrink-0"
-                                            />
-                                            <span className="hidden md:inline text-sm font-semibold text-white">
-                                              {characterRanking.character_name}
-                                            </span>
-                                          </div>
                                         </td>
                                       </tr>
                                     );
@@ -2849,8 +3324,11 @@ export default function SmashTournamentELO({
                         <div className="px-2 pt-4 text-center">
                           <div className="text-sm text-gray-400">
                             Showing {visibleCharacterRankings.length} of{" "}
-                            {displayedCharacterRankings.length} character
-                            rankings
+                            {displayedCharacterRankings.length}{" "}
+                            {shouldShowCharacterSearchResults &&
+                            selectedCharacterRankingCharacter
+                              ? `${selectedCharacterRankingCharacter} rankings`
+                              : "character rankings"}
                           </div>
                           {hasMoreVisibleCharacterRankings ? (
                             <div
@@ -3050,8 +3528,7 @@ export default function SmashTournamentELO({
                               Official Tier List
                             </h2>
                             <div className="mt-1 text-sm text-red-100/90">
-                              Based on each player&apos;s highest-ranked
-                              character
+                              {tierListSubtitle}
                             </div>
                             <RefreshStatus
                               refreshing={isRefreshing}
@@ -3082,11 +3559,70 @@ export default function SmashTournamentELO({
                             isRefreshing ? "opacity-75" : "opacity-100"
                           }`}
                         >
+                        <div className="mb-6">
+                          <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-900 p-1">
+                            {tierListControlOptions.map((option) => (
+                              <button
+                                key={option.id}
+                                onClick={() => updateTierListURL(option.id)}
+                                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 ${
+                                  tierListView === option.id
+                                    ? "bg-red-600 text-white"
+                                    : "text-gray-400 hover:bg-gray-700 hover:text-white"
+                                }`}
+                              >
+                                <span>{option.label}</span>
+                                <span className="rounded-full bg-gray-700 px-2 py-1 text-xs">
+                                  {option.count}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                          {isAllCharactersTierView ? (
+                            <div className="mt-2 text-sm text-gray-400">
+                              {tierListDescription}
+                            </div>
+                          ) : (
+                            <div className="mt-4">
+                              <CharacterBasedFilters
+                                description={tierListDescription}
+                                showFilters={showCharacterBasedFilters}
+                                onToggle={() =>
+                                  setShowCharacterBasedFilters(
+                                    (current) => !current
+                                  )
+                                }
+                                playerOptions={characterRankingPlayerOptions}
+                                selectedPlayerIds={
+                                  selectedCharacterRankingPlayerIds
+                                }
+                                filterMode={characterRankingPlayerFilterMode}
+                                rowLimit={characterRankingPlayerRowLimit}
+                                onPlayersChange={
+                                  handleCharacterRankingPlayerFilterChange
+                                }
+                                onFilterModeChange={(nextMode) =>
+                                  updateCharacterBasedFilters({
+                                    characterRankingPlayerFilterMode: nextMode,
+                                  })
+                                }
+                                onRowLimitChange={(nextLimit) =>
+                                  updateCharacterBasedFilters({
+                                    characterRankingPlayerRowLimit: nextLimit,
+                                  })
+                                }
+                                onReset={clearCharacterRankingPlayerFilters}
+                                hasAppliedFilters={
+                                  hasCharacterRankingControlsApplied
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
                         {/* Tier List Table */}
                         <div className="space-y-1 md:space-y-0">
-                          {(["S", "A", "B", "C", "D", "E", "F"] as Tier[]).map(
-                            (tierName) => {
-                              const tierPlayers = tierList[tierName];
+                          {TIER_NAMES.map((tierName) => {
+                              const tierPlayers = displayedTierList[tierName];
 
                               return (
                                 <div
@@ -3120,12 +3656,16 @@ export default function SmashTournamentELO({
                                       <div className="flex flex-wrap gap-4 md:gap-6">
                                         {tierPlayers.map((player) => (
                                           <div
-                                            key={player.id}
+                                            key={player.key}
                                             className="relative group cursor-pointer"
                                             title={`${
                                               player.display_name || player.name
-                                            } (${player.character_name}) - ELO: ${player.elo}${
-                                              player.inactive
+                                            }${
+                                              player.character_name
+                                                ? ` (${player.character_name})`
+                                                : ""
+                                            } - ELO: ${player.elo}${
+                                              player.showInactiveOverlay
                                                 ? " (Inactive)"
                                                 : ""
                                             }`}
@@ -3140,30 +3680,33 @@ export default function SmashTournamentELO({
                                                 player={player}
                                                 size="lg"
                                                 borderColor={
-                                                  player.inactive
+                                                  player.showInactiveOverlay
                                                     ? "border-gray-500 group-hover:border-gray-400"
                                                     : "border-gray-600 group-hover:border-yellow-400"
                                                 }
                                                 borderWidth="border-2 md:border-3"
                                                 additionalClasses={`rounded-lg transition-all duration-200 bg-gray-700 md:shadow-lg ${
-                                                  player.inactive
+                                                  player.showInactiveOverlay
                                                     ? "opacity-60 grayscale"
                                                     : ""
                                                 }`}
                                               />
-                                              <div className="absolute -bottom-2 -right-2 z-20 rounded-full bg-gray-950/90 p-1 shadow-lg ring-2 ring-gray-700">
-                                                <CharacterProfilePicture
-                                                  characterName={
-                                                    player.character_name
-                                                  }
-                                                  size="sm"
-                                                  className="h-8 w-8 border-0"
-                                                  alt={`${player.character_name} icon`}
-                                                />
-                                              </div>
+                                              {!isAllCharactersTierView &&
+                                                player.character_name && (
+                                                <div className="absolute bottom-0 left-0 z-20 -translate-x-[33%] translate-y-[33%] rounded-full bg-gray-950/90 p-1 shadow-lg ring-2 ring-gray-700">
+                                                  <CharacterProfilePicture
+                                                    characterName={
+                                                      player.character_name
+                                                    }
+                                                    size="md"
+                                                    className="h-9 w-9 md:h-12 md:w-12 border-0"
+                                                    alt={`${player.character_name} icon`}
+                                                  />
+                                                </div>
+                                              )}
 
                                               {/* Inactive player overlay with speech bubble */}
-                                              {player.inactive && (
+                                              {player.showInactiveOverlay && (
                                                 <>
                                                   {/* Semi-transparent dark overlay */}
                                                   <div className="absolute inset-0 bg-black/40 rounded-lg z-10 pointer-events-none"></div>
@@ -3209,10 +3752,12 @@ export default function SmashTournamentELO({
                                                   }
                                                 />
                                               </div>
-                                              <div className="text-gray-300">
-                                                Best character:{" "}
-                                                {player.character_name}
-                                              </div>
+                                              {player.character_name && (
+                                                <div className="text-gray-300">
+                                                  {player.characterLabel}:{" "}
+                                                  {player.character_name}
+                                                </div>
+                                              )}
                                               <div className="text-yellow-400 font-bold">
                                                 ELO: {player.elo}
                                               </div>
@@ -3225,8 +3770,7 @@ export default function SmashTournamentELO({
                                   </div>
                                 </div>
                               );
-                            }
-                          )}
+                            })}
                         </div>
                       </div>
                       )}
@@ -3482,7 +4026,7 @@ export default function SmashTournamentELO({
                                     ).sort()}
                                     selectedValues={selectedCharacterFilter}
                                     onChange={setSelectedCharacterFilter}
-                                    placeholder="All characters"
+                                    placeholder="Any character"
                                     label="Characters"
                                     multiple
                                   />

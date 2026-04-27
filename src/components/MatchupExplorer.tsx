@@ -817,7 +817,7 @@ export default function MatchupExplorer({
     const rankingPlayer = serializePlayerIdToQueryValue(playerId, players);
     const params = new URLSearchParams();
 
-    params.set("leaderboard", "character");
+    params.set("overallView", "best-character");
     params.append("rankingPlayer", rankingPlayer);
 
     router.push(`/?${params.toString()}`);
@@ -946,11 +946,6 @@ export default function MatchupExplorer({
             />
           </div>
 
-          {!bothPlayersSelected && (
-            <div className="rounded-xl border border-gray-700 bg-black/10 px-4 py-3 text-sm text-gray-400">
-              Select two players to compare their 1v1 history.
-            </div>
-          )}
         </div>
       </div>
 
