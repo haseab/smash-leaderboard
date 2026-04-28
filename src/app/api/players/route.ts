@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeAppUrl } from "@/lib/site-url";
+import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
 
@@ -190,7 +191,9 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     top_ten_played: player.top_ten_played,
     country: player.country,
     picture: normalizeAppUrl(player.picture),
-    main_character: player.main_character,
+    main_character: player.main_character
+      ? getCanonicalCharacterName(player.main_character)
+      : null,
     total_wins: Number(player.total_wins),
     total_losses: Number(player.total_losses),
     total_kos: Number(player.total_kos),

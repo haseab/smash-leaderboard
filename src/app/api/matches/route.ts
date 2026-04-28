@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { resolvePlayersByQueryValues } from "@/lib/server/playerQueryResolver";
+import {
+  expandCharacterAliasQueryValues,
+  getCanonicalCharacterName,
+} from "@/utils/characterMapping";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -39,7 +43,8 @@ const transformMatches = (matches: MatchWithParticipants[]) =>
       player: Number(participant.player),
       player_name: participant.players.name,
       player_display_name: participant.players.display_name,
-      smash_character: participant.smash_character,
+      smash_character: getCanonicalCharacterName(participant.smash_character),
+      elo_diff: participant.elo_diff,
       is_cpu: participant.is_cpu,
       total_kos: participant.total_kos,
       total_falls: participant.total_falls,
@@ -133,7 +138,14 @@ export async function GET(request: Request) {
     const limit = parsePositiveInt(searchParams.get("limit"), 20, 100);
     const offset = (page - 1) * limit;
     const playerFilter = searchParams.getAll("player");
-    const characterFilter = searchParams.getAll("character");
+    const characterFilter = Array.from(
+      new Set(
+        searchParams
+          .getAll("character")
+          .map((character) => getCanonicalCharacterName(character))
+          .filter(Boolean)
+      )
+    );
     const only1v1 = searchParams.get("only1v1") === "true";
     const matchIdParam = searchParams.get("matchId");
     const directionParam = searchParams.get("direction");
@@ -311,7 +323,9 @@ export async function GET(request: Request) {
       const characterConditions = characterFilter.map((character) => ({
         match_participants: {
           some: {
-            smash_character: character,
+            smash_character: {
+              in: expandCharacterAliasQueryValues(character),
+            },
           },
         },
       }));

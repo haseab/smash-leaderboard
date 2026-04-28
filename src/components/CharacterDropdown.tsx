@@ -1,6 +1,7 @@
 "use client";
 
 import CharacterProfilePicture from "@/components/CharacterProfilePicture";
+import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -15,7 +16,13 @@ interface CharacterDropdownProps {
 }
 
 const normalizeCharacters = (characters: string[]) =>
-  Array.from(new Set(characters.map((character) => character.trim()).filter(Boolean))).sort();
+  Array.from(
+    new Set(
+      characters
+        .map((character) => getCanonicalCharacterName(character))
+        .filter(Boolean)
+    )
+  ).sort();
 
 export default function CharacterDropdown({
   characters,

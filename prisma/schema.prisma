@@ -47,6 +47,7 @@ model match_participants {
   match_id        BigInt
   player          BigInt
   smash_character String
+  elo_diff        Int?
   is_cpu          Boolean  @default(false)
   total_kos       Int      @default(0)
   total_falls     Int      @default(0)

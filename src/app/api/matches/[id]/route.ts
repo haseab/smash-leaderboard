@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -56,7 +57,8 @@ export async function GET(
         player: Number(participant.player),
         player_name: participant.players.name,
         player_display_name: participant.players.display_name,
-        smash_character: participant.smash_character,
+        smash_character: getCanonicalCharacterName(participant.smash_character),
+        elo_diff: participant.elo_diff,
         is_cpu: participant.is_cpu,
         total_kos: participant.total_kos,
         total_falls: participant.total_falls,

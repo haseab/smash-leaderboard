@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeAppUrl } from "@/lib/site-url";
+import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
 
@@ -86,7 +87,7 @@ async function fetchCharacterRankingsFromDb(
     display_name: characterRanking.display_name,
     country: characterRanking.country,
     picture: normalizeAppUrl(characterRanking.picture),
-    character_name: characterRanking.character_name,
+    character_name: getCanonicalCharacterName(characterRanking.character_name),
     elo: Number(characterRanking.elo),
     matches: characterRanking.total_wins + characterRanking.total_losses,
     total_wins: characterRanking.total_wins,

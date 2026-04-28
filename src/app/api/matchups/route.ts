@@ -1,5 +1,9 @@
 import { resolvePlayerPairByQueryValues } from "@/lib/server/playerQueryResolver";
 import { prisma } from "@/lib/prisma";
+import {
+  expandCharacterAliasQueryValues,
+  getCanonicalCharacterName,
+} from "@/utils/characterMapping";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
@@ -15,11 +19,13 @@ interface MatchupRecentMatch {
   id: number;
   created_at: string;
   player1Character: string;
+  player1EloDiff: number | null;
   player1Kos: number;
   player1Falls: number;
   player1Sds: number;
   player1Won: boolean;
   player2Character: string;
+  player2EloDiff: number | null;
   player2Kos: number;
   player2Falls: number;
   player2Sds: number;
@@ -42,6 +48,13 @@ const parseStringArray = (values: string[]) =>
   Array.from(
     new Set(values.map((value) => value.trim()).filter(Boolean))
   );
+
+const parseCanonicalCharacterArray = (values: string[]) =>
+  Array.from(
+    new Set(
+      values.map((value) => getCanonicalCharacterName(value)).filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
 
 const isValidDateInput = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -105,19 +118,27 @@ export async function GET(request: Request) {
     ]);
     const playerOneId = playerOne ? Number(playerOne.id) : null;
     const playerTwoId = playerTwo ? Number(playerTwo.id) : null;
-    const playerOneCharacter =
-      searchParams.get("player1Character")?.trim() || "";
-    const playerTwoCharacter =
-      searchParams.get("player2Character")?.trim() || "";
-    const playerOneExcludedCharacters = parseStringArray(
+    const playerOneCharacter = getCanonicalCharacterName(
+      searchParams.get("player1Character")?.trim() || ""
+    );
+    const playerTwoCharacter = getCanonicalCharacterName(
+      searchParams.get("player2Character")?.trim() || ""
+    );
+    const playerOneExcludedCharacters = parseCanonicalCharacterArray(
       searchParams
         .getAll("player1ExcludeCharacter")
-        .filter((character) => character.trim() !== playerOneCharacter)
+        .filter(
+          (character) =>
+            getCanonicalCharacterName(character) !== playerOneCharacter
+        )
     );
-    const playerTwoExcludedCharacters = parseStringArray(
+    const playerTwoExcludedCharacters = parseCanonicalCharacterArray(
       searchParams
         .getAll("player2ExcludeCharacter")
-        .filter((character) => character.trim() !== playerTwoCharacter)
+        .filter(
+          (character) =>
+            getCanonicalCharacterName(character) !== playerTwoCharacter
+        )
     );
     const timeRange = parseTimeRange(searchParams.get("timeRange"));
     const startDateInput = searchParams.get("startDate");
@@ -175,19 +196,40 @@ export async function GET(request: Request) {
     const rangeEndFilter = rangeEndExclusive
       ? Prisma.sql`AND m.created_at < ${rangeEndExclusive}`
       : Prisma.empty;
-    const playerOneCharacterFilter = playerOneCharacter
-      ? Prisma.sql`AND h.player_one_character = ${playerOneCharacter}`
+    const playerOneCharacterAliases = playerOneCharacter
+      ? expandCharacterAliasQueryValues(playerOneCharacter)
+      : [];
+    const playerTwoCharacterAliases = playerTwoCharacter
+      ? expandCharacterAliasQueryValues(playerTwoCharacter)
+      : [];
+    const playerOneExcludedCharacterAliases = Array.from(
+      new Set(
+        playerOneExcludedCharacters.flatMap((character) =>
+          expandCharacterAliasQueryValues(character)
+        )
+      )
+    );
+    const playerTwoExcludedCharacterAliases = Array.from(
+      new Set(
+        playerTwoExcludedCharacters.flatMap((character) =>
+          expandCharacterAliasQueryValues(character)
+        )
+      )
+    );
+
+    const playerOneCharacterFilter = playerOneCharacterAliases.length > 0
+      ? Prisma.sql`AND h.player_one_character IN (${Prisma.join(playerOneCharacterAliases)})`
       : Prisma.empty;
-    const playerTwoCharacterFilter = playerTwoCharacter
-      ? Prisma.sql`AND h.player_two_character = ${playerTwoCharacter}`
+    const playerTwoCharacterFilter = playerTwoCharacterAliases.length > 0
+      ? Prisma.sql`AND h.player_two_character IN (${Prisma.join(playerTwoCharacterAliases)})`
       : Prisma.empty;
     const playerOneExcludedCharactersFilter =
-      playerOneExcludedCharacters.length > 0
-        ? Prisma.sql`AND h.player_one_character NOT IN (${Prisma.join(playerOneExcludedCharacters)})`
+      playerOneExcludedCharacterAliases.length > 0
+        ? Prisma.sql`AND h.player_one_character NOT IN (${Prisma.join(playerOneExcludedCharacterAliases)})`
         : Prisma.empty;
     const playerTwoExcludedCharactersFilter =
-      playerTwoExcludedCharacters.length > 0
-        ? Prisma.sql`AND h.player_two_character NOT IN (${Prisma.join(playerTwoExcludedCharacters)})`
+      playerTwoExcludedCharacterAliases.length > 0
+        ? Prisma.sql`AND h.player_two_character NOT IN (${Prisma.join(playerTwoExcludedCharacterAliases)})`
         : Prisma.empty;
 
     const [summaryRow] = await prisma.$queryRaw<MatchupSummaryRow[]>(Prisma.sql`
@@ -232,11 +274,13 @@ export async function GET(request: Request) {
           em.id AS match_id,
           em.created_at,
           mp1.smash_character AS player_one_character,
+          mp1.elo_diff AS player_one_elo_diff,
           mp1.total_kos AS player_one_kos,
           mp1.total_falls AS player_one_falls,
           mp1.total_sds AS player_one_sds,
           mp1.has_won AS player_one_has_won,
           mp2.smash_character AS player_two_character,
+          mp2.elo_diff AS player_two_elo_diff,
           mp2.total_kos AS player_two_kos,
           mp2.total_falls AS player_two_falls,
           mp2.total_sds AS player_two_sds,
@@ -313,6 +357,8 @@ export async function GET(request: Request) {
                 recent.created_at,
                 'player1Character',
                 recent.player_one_character,
+                'player1EloDiff',
+                recent.player_one_elo_diff,
                 'player1Kos',
                 recent.player_one_kos,
                 'player1Falls',
@@ -323,6 +369,8 @@ export async function GET(request: Request) {
                 recent.player_one_has_won,
                 'player2Character',
                 recent.player_two_character,
+                'player2EloDiff',
+                recent.player_two_elo_diff,
                 'player2Kos',
                 recent.player_two_kos,
                 'player2Falls',
@@ -382,12 +430,16 @@ export async function GET(request: Request) {
       overallMatches: result.overall_matches,
       totalMatches: result.total_matches,
       availableCharacters: {
-        player1: result.player1_available_characters,
-        player2: result.player2_available_characters,
+        player1: parseCanonicalCharacterArray(result.player1_available_characters),
+        player2: parseCanonicalCharacterArray(result.player2_available_characters),
       },
       player1: result.player1_stats,
       player2: result.player2_stats,
-      recentMatches: result.recent_matches,
+      recentMatches: result.recent_matches.map((match) => ({
+        ...match,
+        player1Character: getCanonicalCharacterName(match.player1Character),
+        player2Character: getCanonicalCharacterName(match.player2Character),
+      })),
     });
   } catch (error) {
     console.error("[GET /api/matchups] Error fetching matchup:", error);

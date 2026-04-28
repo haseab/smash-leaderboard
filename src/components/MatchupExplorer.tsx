@@ -9,6 +9,7 @@ import {
   getPlayerQueryLabel,
   serializePlayerIdToQueryValue,
 } from "@/lib/playerQuery";
+import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { X } from "lucide-react";
 import ReactCountryFlag from "react-country-flag";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -46,11 +47,13 @@ interface MatchupApiResponse {
     id: number;
     created_at: string;
     player1Character: string;
+    player1EloDiff: number | null;
     player1Kos: number;
     player1Falls: number;
     player1Sds: number;
     player1Won: boolean;
     player2Character: string;
+    player2EloDiff: number | null;
     player2Kos: number;
     player2Falls: number;
     player2Sds: number;
@@ -203,7 +206,11 @@ const getUniqueStringValues = (values: string[]) =>
   ).sort();
 
 const getCharacterOptions = (options: string[], selectedValues: string[]) =>
-  getUniqueStringValues([...options, ...selectedValues]);
+  getUniqueStringValues(
+    [...options, ...selectedValues].map((value) =>
+      getCanonicalCharacterName(value)
+    )
+  );
 
 function PlayerAvatar({
   player,
@@ -500,13 +507,21 @@ export default function MatchupExplorer({
 
   const player1QueryValue = searchParams.get("player1") || "";
   const player2QueryValue = searchParams.get("player2") || "";
-  const player1Character = searchParams.get("player1Character") || "";
-  const player2Character = searchParams.get("player2Character") || "";
+  const player1Character = getCanonicalCharacterName(
+    searchParams.get("player1Character") || ""
+  );
+  const player2Character = getCanonicalCharacterName(
+    searchParams.get("player2Character") || ""
+  );
   const player1ExcludedCharacters = getUniqueStringValues(
-    searchParams.getAll("player1ExcludeCharacter")
+    searchParams
+      .getAll("player1ExcludeCharacter")
+      .map((value) => getCanonicalCharacterName(value))
   );
   const player2ExcludedCharacters = getUniqueStringValues(
-    searchParams.getAll("player2ExcludeCharacter")
+    searchParams
+      .getAll("player2ExcludeCharacter")
+      .map((value) => getCanonicalCharacterName(value))
   );
   const player1ExcludedCharactersKey = player1ExcludedCharacters.join("||");
   const player2ExcludedCharactersKey = player2ExcludedCharacters.join("||");
@@ -818,6 +833,7 @@ export default function MatchupExplorer({
     const params = new URLSearchParams();
 
     params.set("rankingsView", "character-based");
+    params.set("rankingPlayerLimit", "all");
     params.append("rankingPlayer", rankingPlayer);
 
     router.push(`/?${params.toString()}`);
@@ -856,6 +872,7 @@ export default function MatchupExplorer({
               player_name: selectedPlayer1.name,
               player_display_name: selectedPlayer1.display_name,
               smash_character: match.player1Character,
+              elo_diff: match.player1EloDiff,
               is_cpu: false,
               total_kos: match.player1Kos,
               total_falls: match.player1Falls,
@@ -868,6 +885,7 @@ export default function MatchupExplorer({
               player_name: selectedPlayer2.name,
               player_display_name: selectedPlayer2.display_name,
               smash_character: match.player2Character,
+              elo_diff: match.player2EloDiff,
               is_cpu: false,
               total_kos: match.player2Kos,
               total_falls: match.player2Falls,

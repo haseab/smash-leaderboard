@@ -93,9 +93,42 @@ export const characterToFileMapping: Record<string, string> = {
   "MIN MIN": "min_min",
   SEPHIROTH: "sephiroth",
   PYRA: "homura", // Pyra's Japanese name in filename
-  MYTHRA: "homura", // Both Pyra and Mythra use same file
+  MYTHRA: "homura",
+  "PYRA/MYTHRA": "homura", // Both Pyra and Mythra use same file
   KAZUYA: "kazuya",
   SORA: "sora",
+};
+
+const specialMappings: Record<string, string> = {
+  // Minecraft skins map to Steve
+  ENDERMAN: "STEVE",
+  STEVE: "STEVE",
+  ALEX: "STEVE",
+  ZOMBIE: "STEVE",
+  "R.O.B.": "R.O.B.",
+  "MR. GAME & WATCH": "MR. GAME & WATCH",
+  // Characters that might be stored differently in the database
+  "KING K ROOL": "KING K. ROOL",
+  "KING K. ROOL": "KING K. ROOL",
+  ROSALINA: "ROSALINA & LUMA",
+  "ROSALINA & LUMA": "ROSALINA & LUMA",
+  PYRA: "PYRA/MYTHRA",
+  MYTHRA: "PYRA/MYTHRA",
+  "PYRA/MYTHRA": "PYRA/MYTHRA",
+  AEGIS: "PYRA/MYTHRA",
+};
+
+const canonicalDisplayMappings: Record<string, string> = {
+  "KING K. ROOL": "King K. Rool",
+  "ROSALINA & LUMA": "Rosalina & Luma",
+  "PYRA/MYTHRA": "Pyra/Mythra",
+};
+
+const characterAliasQueryValues: Record<string, string[]> = {
+  STEVE: ["Steve", "Alex", "Enderman", "Zombie"],
+  "KING K. ROOL": ["King K. Rool", "King K Rool"],
+  "ROSALINA & LUMA": ["Rosalina & Luma", "Rosalina"],
+  "PYRA/MYTHRA": ["Pyra/Mythra", "Pyra", "Mythra"],
 };
 
 export function getCharacterIcon(characterName: string): string {
@@ -103,7 +136,7 @@ export function getCharacterIcon(characterName: string): string {
   const fileName = characterToFileMapping[normalizedName];
   if (!fileName) {
     console.warn(
-      `Character icon not found for: ${characterName} (normalized: ${normalizedName})`
+      `Character icon not found for: ${characterName} (normalized: ${normalizedName})`,
     );
     return "/images/svgs/mario.svg"; // fallback to mario icon
   }
@@ -117,6 +150,30 @@ export function getCharacterIconUrl(characterName: string): string {
     return "/images/svgs/mario.svg"; // fallback to mario icon
   }
   return `/images/svgs/${fileName}.svg`;
+}
+
+export function getCanonicalCharacterName(characterName: string): string {
+  const trimmedName = characterName.trim();
+
+  if (!trimmedName) {
+    return "";
+  }
+
+  const normalizedName = normalizeCharacterName(trimmedName);
+  return canonicalDisplayMappings[normalizedName] || trimmedName;
+}
+
+export function expandCharacterAliasQueryValues(characterName: string): string[] {
+  const trimmedName = characterName.trim();
+
+  if (!trimmedName) {
+    return [];
+  }
+
+  const normalizedName = normalizeCharacterName(trimmedName);
+  const aliases = characterAliasQueryValues[normalizedName] || [trimmedName];
+
+  return Array.from(new Set(aliases));
 }
 
 // Helper function to normalize character names (handle ALL CAPS, etc.)
@@ -140,21 +197,6 @@ export function normalizeCharacterName(characterName: string): string {
     })
     .join(" ")
     .toUpperCase();
-
-  // Handle special character name mappings
-  const specialMappings: Record<string, string> = {
-    // Minecraft skins map to Steve
-    ENDERMAN: "STEVE",
-    STEVE: "STEVE",
-    ALEX: "STEVE",
-    ZOMBIE: "STEVE",
-    "R.O.B.": "R.O.B.",
-    "MR. GAME & WATCH": "MR. GAME & WATCH",
-    // Characters that might be stored differently in the database
-    "KING K ROOL": "KING K. ROOL",
-    "KING K. ROOL": "KING K. ROOL",
-    ROSALINA: "ROSALINA & LUMA",
-  };
 
   return specialMappings[upperCase] || upperCase;
 }

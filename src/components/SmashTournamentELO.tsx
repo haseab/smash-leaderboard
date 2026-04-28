@@ -7,6 +7,7 @@ import {
   serializePlayerIdsToQueryValues,
 } from "@/lib/playerQuery";
 import { Player } from "@/lib/prisma";
+import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import {
   Check,
   Filter,
@@ -88,6 +89,7 @@ interface MatchParticipant {
   player_name: string;
   player_display_name: string | null;
   smash_character: string;
+  elo_diff?: number | null;
   is_cpu: boolean;
   total_kos: number;
   total_falls: number;
@@ -146,6 +148,7 @@ const MATCH_CONTEXT_PAGE_SIZE = 2;
 const CHARACTER_RANKINGS_BATCH_SIZE = 50;
 const CHARACTER_RANKING_MIN_MATCHES = 5;
 const DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT = 3;
+const TIER_LIST_INACTIVE_GRACE_DAYS = 75;
 const RANKINGS_VIEW_QUERY_PARAM = "rankingsView";
 const LEGACY_OVERALL_VIEW_QUERY_PARAM = "overallView";
 const RANKING_QUERY_CHARACTER_PARAM = "rankingCharacter";
@@ -177,6 +180,21 @@ const getUniqueQueryValues = (values: string[]) =>
 const getPlayerIdSelectionKey = (playerIds: string[]) =>
   Array.from(new Set(playerIds)).sort().join("|");
 
+const getDaysAgo = (lastMatchDate: string | null | undefined): number | null => {
+  if (!lastMatchDate) return null;
+  const lastMatch = new Date(lastMatchDate);
+  const now = new Date();
+  const diffTime = now.getTime() - lastMatch.getTime();
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+};
+
+const isTierListEligibleInactivePlayer = (
+  lastMatchDate: string | null | undefined
+) => {
+  const daysAgo = getDaysAgo(lastMatchDate);
+  return daysAgo !== null && daysAgo <= TIER_LIST_INACTIVE_GRACE_DAYS;
+};
+
 const parseLeaderboardTab = (value: string | null): LeaderboardTab => {
   switch (value) {
     case "character":
@@ -196,7 +214,7 @@ const parseLegacyOverallRankingsView = (
     case "best-character":
       return value;
     default:
-      return "best-character";
+      return "all-characters";
   }
 };
 
@@ -730,13 +748,11 @@ export default function SmashTournamentELO({
           searchParams.get(LEGACY_OVERALL_VIEW_QUERY_PARAM)
         )
       : "best-character";
-  const hasExplicitOverallRankingsViewParam =
-    defaultTab === "rankings" &&
-    (searchParams.has(RANKINGS_VIEW_QUERY_PARAM) ||
-      searchParams.has(LEGACY_OVERALL_VIEW_QUERY_PARAM));
   const selectedCharacterRankingCharacter =
     defaultTab === "rankings"
-      ? (searchParams.get(RANKING_QUERY_CHARACTER_PARAM) || "").trim()
+      ? getCanonicalCharacterName(
+          searchParams.get(RANKING_QUERY_CHARACTER_PARAM) || ""
+        )
       : "";
   const tierListView =
     defaultTab === "tiers"
@@ -833,7 +849,20 @@ export default function SmashTournamentELO({
       .map((characterRanking) => String(characterRanking.player_id))
   );
   const defaultCharacterBasedPlayerIds = [...players]
-    .filter((player) => !player.inactive && player.is_ranked)
+    .filter((player) => {
+      if (!player.is_ranked) {
+        return false;
+      }
+
+      if (defaultTab !== "tiers") {
+        return !player.inactive;
+      }
+
+      return (
+        !player.inactive ||
+        isTierListEligibleInactivePlayer(player.last_match_date)
+      );
+    })
     .filter(
       (player) =>
         eligibleCharacterRankingPlayerIds.size === 0 ||
@@ -867,7 +896,11 @@ export default function SmashTournamentELO({
       const playerQueryValues = getUniqueQueryValues(
         searchParams.getAll("player")
       );
-      const characters = searchParams.getAll("character");
+      const characters = getUniqueQueryValues(
+        searchParams
+          .getAll("character")
+          .map((character) => getCanonicalCharacterName(character))
+      );
       const only1v1Param = searchParams.get("only1v1") === "true";
       const matchIdParam = searchParams.get("matchId") || "";
       const hasFilters =
@@ -891,7 +924,7 @@ export default function SmashTournamentELO({
   const currentAutoRefreshDisabled = useRef<boolean>(false);
   const currentLeaderboardTab = useRef<string>("overall");
   const currentOverallRankingsView =
-    useRef<OverallRankingsView>("best-character");
+    useRef<OverallRankingsView>("all-characters");
 
   // Update refs when state changes
   useEffect(() => {
@@ -1029,7 +1062,10 @@ export default function SmashTournamentELO({
 
     const params = new URLSearchParams();
     params.set("leaderboard", "character");
-    params.set(RANKING_QUERY_CHARACTER_PARAM, characterName);
+    params.set(
+      RANKING_QUERY_CHARACTER_PARAM,
+      getCanonicalCharacterName(characterName)
+    );
     router.push(`/?${params.toString()}`);
   };
 
@@ -1113,10 +1149,7 @@ export default function SmashTournamentELO({
       params.set("leaderboard", mergedState.leaderboardTab);
     }
 
-    if (
-      mergedState.overallRankingsView !== "best-character" ||
-      hasExplicitOverallRankingsViewParam
-    ) {
+    if (mergedState.overallRankingsView !== "all-characters") {
       params.set(
         RANKINGS_VIEW_QUERY_PARAM,
         serializeOverallRankingsView(mergedState.overallRankingsView)
@@ -1211,7 +1244,7 @@ export default function SmashTournamentELO({
   const handleCharacterRankingCharacterChange = (nextCharacter: string) => {
     updateRankingsURL({
       leaderboardTab: "character",
-      selectedCharacterRankingCharacter: nextCharacter,
+      selectedCharacterRankingCharacter: getCanonicalCharacterName(nextCharacter),
     });
   };
 
@@ -2196,18 +2229,6 @@ export default function SmashTournamentELO({
     return "F";
   };
 
-  // Helper function to calculate days ago from last match date
-  const getDaysAgo = (
-    lastMatchDate: string | null | undefined
-  ): number | null => {
-    if (!lastMatchDate) return null;
-    const lastMatch = new Date(lastMatchDate);
-    const now = new Date();
-    const diffTime = now.getTime() - lastMatch.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
   // Sort players by ELO
   const sortedPlayers = [...players].sort((a, b) => b.elo - a.elo);
   const trimmedMatchIdSearchInput = matchIdSearchInput.trim();
@@ -2244,6 +2265,12 @@ export default function SmashTournamentELO({
   // Separate ranked and unranked players
   // Ranked players: only active ranked players
   const rankedPlayers = activePlayers.filter((player) => player.is_ranked);
+  const tierListRankedPlayers = sortedPlayers.filter(
+    (player) =>
+      player.is_ranked &&
+      (!player.inactive ||
+        isTierListEligibleInactivePlayer(player.last_match_date))
+  );
   // Unranked players: includes both active and inactive unranked players
   const unrankedPlayers = sortedPlayers.filter((player) => !player.is_ranked);
 
@@ -2254,6 +2281,7 @@ export default function SmashTournamentELO({
 
   // Calculate dynamic tier thresholds ONLY for ranked players
   const tierThresholds = calculateTierThresholds(rankedPlayers);
+  const tierListThresholds = calculateTierThresholds(tierListRankedPlayers);
   const eligibleCharacterRankings = characterRankings.filter(
     (characterRanking) =>
       characterRanking.matches >= CHARACTER_RANKING_MIN_MATCHES
@@ -2369,11 +2397,17 @@ export default function SmashTournamentELO({
   const characterBasedTierEntries = limitedCharacterRankings.filter(
     (characterRanking) => {
       const player = playersById.get(characterRanking.player_id);
-      const daysAgo = getDaysAgo(
-        player?.last_match_date ?? characterRanking.last_match_date
-      );
 
-      return daysAgo !== null && daysAgo < 90;
+      if (!player) {
+        return isTierListEligibleInactivePlayer(characterRanking.last_match_date);
+      }
+
+      return (
+        !player.inactive ||
+        isTierListEligibleInactivePlayer(
+          player.last_match_date ?? characterRanking.last_match_date
+        )
+      );
     }
   );
   const characterBasedTierThresholds = calculateTierThresholds(
@@ -2404,8 +2438,8 @@ export default function SmashTournamentELO({
   });
   const allCharactersTierList = createEmptyTierList();
 
-  rankedPlayers.forEach((player) => {
-    const tier = getTier(player.elo, tierThresholds);
+  tierListRankedPlayers.forEach((player) => {
+    const tier = getTier(player.elo, tierListThresholds);
 
     allCharactersTierList[tier].push({
       key: `player-${player.id}`,
@@ -2418,25 +2452,26 @@ export default function SmashTournamentELO({
       characterLabel: "Main character",
       elo: player.elo,
       current_win_streak: player.current_win_streak,
-      inactive: false,
-      showInactiveOverlay: false,
+      inactive: player.inactive,
+      showInactiveOverlay: player.inactive,
     });
   });
   const isAllCharactersTierView = tierListView === "all-characters";
   const displayedTierList = isAllCharactersTierView
     ? allCharactersTierList
     : characterBasedTierList;
+  const tierListEloLabel = isAllCharactersTierView ? "ELO" : "Character ELO";
   const tierListSubtitle = isAllCharactersTierView
     ? "Based on each player's overall ELO"
     : "Based on filtered character ELO rankings";
   const tierListDescription = isAllCharactersTierView
-    ? "Tiered by overall player ELO using their full match history."
+    ? "Tiered by overall player ELO using their full match history, including ranked inactive players from the last 90 days."
     : "Tiered by filtered character ELO rows, with at least 5 games on that character.";
   const tierListControlOptions = [
     {
       id: "all-characters" as const,
       label: "Overall",
-      count: rankedPlayers.length,
+      count: tierListRankedPlayers.length,
     },
     {
       id: "best-character" as const,
@@ -3699,7 +3734,7 @@ export default function SmashTournamentELO({
                                               player.character_name
                                                 ? ` (${player.character_name})`
                                                 : ""
-                                            } - ELO: ${player.elo}${
+                                            } - ${tierListEloLabel}: ${player.elo}${
                                               player.showInactiveOverlay
                                                 ? " (Inactive)"
                                                 : ""
@@ -3794,7 +3829,7 @@ export default function SmashTournamentELO({
                                                 </div>
                                               )}
                                               <div className="text-yellow-400 font-bold">
-                                                ELO: {player.elo}
+                                                {tierListEloLabel}: {player.elo}
                                               </div>
                                               <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-black"></div>
                                             </div>
