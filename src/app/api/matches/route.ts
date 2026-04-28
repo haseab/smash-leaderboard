@@ -147,6 +147,9 @@ export async function GET(request: Request) {
       )
     );
     const only1v1 = searchParams.get("only1v1") === "true";
+    const only2v2 = searchParams.get("only2v2") === "true" && !only1v1;
+    const participantCountFilter = only1v1 ? 2 : only2v2 ? 4 : null;
+    const sameTeamOnly = searchParams.get("sameTeam") === "true";
     const matchIdParam = searchParams.get("matchId");
     const directionParam = searchParams.get("direction");
     const cursorMatchIdParam = searchParams.get("cursorMatchId");
@@ -181,6 +184,8 @@ export async function GET(request: Request) {
       resolvedPlayerFilter: resolvedPlayerFilterIds.map(String),
       characterFilter,
       only1v1,
+      only2v2,
+      sameTeamOnly,
       matchIdParam,
       directionParam,
       cursorMatchIdParam,
@@ -217,14 +222,29 @@ export async function GET(request: Request) {
       },
     ];
 
-    // Handle 1v1 filter: exactly 2 non-CPU participants
+    // Handle participant-count filters: exactly 2 or 4 non-CPU participants
     // Prisma doesn't support HAVING COUNT in where clauses, so we use raw SQL
     // This is still efficient - we only get match IDs, not full match data
-    if (only1v1) {
+    if (participantCountFilter) {
       const playerIds = resolvedPlayerFilterIds;
+      const teamResultCondition =
+        participantCountFilter === 4
+          ? `AND (
+            SELECT COUNT(*) FROM match_participants mp_winners
+            WHERE mp_winners.match_id = m.id
+              AND mp_winners.is_cpu = false
+              AND mp_winners.has_won = true
+          ) = 2
+          AND (
+            SELECT COUNT(*) FROM match_participants mp_losers
+            WHERE mp_losers.match_id = m.id
+              AND mp_losers.is_cpu = false
+              AND mp_losers.has_won = false
+          ) = 2`
+          : "";
 
       if (playerIds.length > 0) {
-        // 1v1 + player filter: Use raw SQL to combine both conditions efficiently
+        // Participant-count + player filter: Use raw SQL to combine both conditions efficiently
         // Build EXISTS conditions for each player (AND logic)
         const existsConditions = playerIds
           .map((_, idx) => {
@@ -237,6 +257,16 @@ export async function GET(request: Request) {
             )`;
           })
           .join(" AND ");
+        const sameTeamCondition =
+          sameTeamOnly && participantCountFilter === 4 && playerIds.length === 2
+            ? `AND (
+              SELECT COUNT(DISTINCT mp_team.has_won)
+              FROM match_participants mp_team
+              WHERE mp_team.match_id = m.id
+                AND mp_team.is_cpu = false
+                AND mp_team.player IN ($1::bigint, $2::bigint)
+            ) = 1`
+            : "";
 
         const query = `
           SELECT m.id
@@ -251,28 +281,32 @@ export async function GET(request: Request) {
               AND p_hidden.banned = true
           )
           AND ${existsConditions}
+          ${sameTeamCondition}
+          ${teamResultCondition}
           AND (
             SELECT COUNT(*) FROM match_participants mp_count
             WHERE mp_count.match_id = m.id AND mp_count.is_cpu = false
-          ) = 2
+          ) = ${participantCountFilter}
         `;
 
-        const oneVOneMatchIds = await prisma.$queryRawUnsafe<Array<{ id: bigint }>>(
+        const participantCountMatchIds = await prisma.$queryRawUnsafe<Array<{ id: bigint }>>(
           query,
           ...playerIds
         );
         
-        if (oneVOneMatchIds.length === 0) {
+        if (participantCountMatchIds.length === 0) {
           return NextResponse.json({
             matches: [],
             pagination: { page, limit, hasMore: false },
           });
         }
         
-        whereConditions.push({ id: { in: oneVOneMatchIds.map((m) => m.id) } });
+        whereConditions.push({
+          id: { in: participantCountMatchIds.map((m) => m.id) },
+        });
       } else {
-        // Simple 1v1 filter without player filter
-        const oneVOneQuery = `
+        // Simple participant-count filter without player filter
+        const participantCountQuery = `
           SELECT m.id
           FROM matches m
           WHERE m.archived = false
@@ -284,28 +318,31 @@ export async function GET(request: Request) {
               AND mp_hidden.is_cpu = false
               AND p_hidden.banned = true
           )
+          ${teamResultCondition}
           AND (
             SELECT COUNT(*) FROM match_participants mp_count
             WHERE mp_count.match_id = m.id AND mp_count.is_cpu = false
-          ) = 2
+          ) = ${participantCountFilter}
         `;
         
-        const oneVOneMatchIds = await prisma.$queryRawUnsafe<Array<{ id: bigint }>>(oneVOneQuery);
+        const participantCountMatchIds = await prisma.$queryRawUnsafe<Array<{ id: bigint }>>(participantCountQuery);
         
-        if (oneVOneMatchIds.length === 0) {
+        if (participantCountMatchIds.length === 0) {
           return NextResponse.json({
             matches: [],
             pagination: { page, limit, hasMore: false },
           });
         }
         
-        whereConditions.push({ id: { in: oneVOneMatchIds.map((m) => m.id) } });
+        whereConditions.push({
+          id: { in: participantCountMatchIds.map((m) => m.id) },
+        });
       }
     }
 
     // Player filter: ALL specified players must be in the match (AND logic)
-    // Only apply if not already handled by 1v1 filter above
-    if (playerFilter.length > 0 && !only1v1) {
+    // Only apply if not already handled by participant-count filter above
+    if (playerFilter.length > 0 && !participantCountFilter) {
       // For each player, ensure they have a participant record in the match
       const playerConditions = resolvedPlayerFilterIds.map((playerId) => ({
         match_participants: {

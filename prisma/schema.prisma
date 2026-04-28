@@ -25,6 +25,8 @@ model players {
   // Relations
   match_participants  match_participants[]
   character_rankings character_rankings[]
+  team_rankings_player_one team_rankings[] @relation("team_rankings_player_one")
+  team_rankings_player_two team_rankings[] @relation("team_rankings_player_two")
   
   @@index([elo(sort: Desc)], name: "idx_players_elo")
   @@map("players")
@@ -86,4 +88,29 @@ model character_rankings {
   @@index([elo(sort: Desc)], name: "idx_character_rankings_elo")
   @@index([player, last_match_date(sort: Desc)], name: "idx_character_rankings_player_last_match")
   @@map("character_rankings")
+}
+
+model team_rankings {
+  id                 BigInt    @id @default(autoincrement())
+  created_at         DateTime  @default(now())
+  player_one         BigInt
+  player_two         BigInt
+  elo                BigInt    @default(1200)
+  total_wins         Int       @default(0)
+  total_losses       Int       @default(0)
+  total_kos          Int       @default(0)
+  total_falls        Int       @default(0)
+  total_sds          Int       @default(0)
+  current_win_streak Int       @default(0)
+  last_match_date    DateTime?
+
+  // Relations
+  player_one_player players @relation("team_rankings_player_one", fields: [player_one], references: [id], onDelete: Cascade)
+  player_two_player players @relation("team_rankings_player_two", fields: [player_two], references: [id], onDelete: Cascade)
+
+  @@unique([player_one, player_two])
+  @@index([elo(sort: Desc)], name: "idx_team_rankings_elo")
+  @@index([player_one, last_match_date(sort: Desc)], name: "idx_team_rankings_player_one_last_match")
+  @@index([player_two, last_match_date(sort: Desc)], name: "idx_team_rankings_player_two_last_match")
+  @@map("team_rankings")
 }
