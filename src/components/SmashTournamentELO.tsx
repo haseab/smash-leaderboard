@@ -739,6 +739,105 @@ const PlayerEloHistoryPanel = memo(
 
 PlayerEloHistoryPanel.displayName = "PlayerEloHistoryPanel";
 
+const getPlayerKdRatio = (player: ExtendedPlayer) =>
+  (player.total_kos || 0) > 0 &&
+  (player.total_falls || 0) + (player.total_sds || 0) > 0
+    ? (
+        (player.total_kos || 0) /
+        ((player.total_falls || 0) + (player.total_sds || 0))
+      ).toFixed(2)
+    : "0.00";
+
+const PlayerStatsSummary = memo(
+  ({ player, winRate }: { player: ExtendedPlayer; winRate: string }) => {
+    const compactStats = [
+      {
+        label: "KOs",
+        value: player.total_kos || 0,
+        valueClassName: "text-orange-400",
+      },
+      {
+        label: "Falls",
+        value: player.total_falls || 0,
+        valueClassName: "text-purple-400",
+      },
+      {
+        label: "Matches",
+        value: player.matches,
+        valueClassName: "text-blue-400",
+      },
+      {
+        label: "K/D Ratio",
+        value: getPlayerKdRatio(player),
+        valueClassName: "text-cyan-400",
+      },
+    ];
+
+    return (
+      <div className="space-y-3">
+        <div className="rounded-lg bg-gray-700/50 p-3">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">
+            Match Record
+          </h4>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="min-w-0 rounded-md bg-gray-950/20 px-2 py-2">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-green-400">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-green-500"></span>
+                <span className="truncate">Wins</span>
+              </div>
+              <div className="text-base font-bold text-white">
+                {player.total_wins || 0}
+              </div>
+            </div>
+            <div className="min-w-0 rounded-md bg-gray-950/20 px-2 py-2">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-red-400">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-red-500"></span>
+                <span className="truncate">Losses</span>
+              </div>
+              <div className="text-base font-bold text-white">
+                {player.total_losses || 0}
+              </div>
+            </div>
+            <div className="min-w-0 rounded-md bg-gray-950/20 px-2 py-2">
+              <div className="mb-1 truncate text-[11px] font-bold text-gray-400">
+                Win Rate
+              </div>
+              <div className="text-base font-bold text-yellow-400">
+                {winRate}%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-700/50 p-3">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-300">
+            Combat Stats
+          </h4>
+          <div className="grid grid-cols-2 gap-2 text-center">
+            {compactStats.map((stat) => (
+              <div
+                key={stat.label}
+                className="min-w-0 rounded-md bg-gray-950/20 px-2 py-2"
+              >
+                <div
+                  className={`truncate text-sm font-bold sm:text-base ${stat.valueClassName}`}
+                >
+                  {stat.value}
+                </div>
+                <div className="truncate text-[10px] uppercase leading-tight text-gray-400">
+                  {stat.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+
+PlayerStatsSummary.displayName = "PlayerStatsSummary";
+
 interface SmashTournamentELOProps {
   defaultTab?: "tiers" | "rankings" | "matchups" | "matches" | "players";
 }
@@ -6084,208 +6183,91 @@ export default function SmashTournamentELO({
                                   <div
                                     key={player.id}
                                     id={`player-${player.id}`}
-                                    className="relative rounded-xl border border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900 p-5 shadow-lg transition-colors duration-200 hover:border-gray-600"
+                                    className="relative rounded-xl border border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900 p-4 shadow-lg transition-colors duration-200 hover:border-gray-600"
                                   >
                                     {/* Rank badge */}
-                                    <div className="absolute top-4 right-4">
-                                      <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-black px-3 py-1 rounded-full text-sm font-bold shadow-lg">
+                                    <div className="absolute right-3 top-3 z-10">
+                                      <div className="rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 px-2.5 py-1 text-xs font-bold text-black shadow-lg">
                                         #{index + 1}
                                       </div>
                                     </div>
                                     {player.inactive && (
-                                      <div className="absolute top-4 left-4">
-                                        <div className="rounded-full border border-gray-500 bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300 shadow-lg">
+                                      <div className="absolute left-3 top-3 z-10">
+                                        <div className="rounded-full border border-gray-500 bg-gray-800 px-2.5 py-1 text-xs font-bold text-gray-300 shadow-lg">
                                           Inactive
                                         </div>
                                       </div>
                                     )}
 
-                                    {/* Player Avatar and Info */}
-                                    <div className="flex flex-col items-center mb-6">
-                                      <div className="relative mb-4">
+                                    <div className="grid gap-4 pt-7 sm:grid-cols-[minmax(135px,0.8fr)_minmax(0,1.2fr)] sm:items-stretch">
+                                      {/* Player Avatar and Info */}
+                                      <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-gray-950/20 p-3 text-center">
                                         <ProfilePicture
                                           player={player}
-                                          size="xl"
+                                          size="lg"
                                           borderWidth="border-4"
                                           additionalClasses="shadow-xl bg-gradient-to-br from-gray-600 to-gray-700"
                                         />
-                                      </div>
 
-                                      <div className="flex items-center justify-center mb-1">
-                                        <h3 className="text-xl font-bold text-white text-center">
-                                          {player.display_name || player.name}
-                                        </h3>
-                                        {player.country &&
-                                          isValidCountryCode(
-                                            player.country
-                                          ) && (
-                                            <ReactCountryFlag
-                                              countryCode={player.country.toUpperCase()}
-                                              svg
-                                              style={{
-                                                width: "2rem",
-                                                height: "1.5rem",
-                                                marginLeft: "0.5rem",
-                                              }}
-                                            />
-                                          )}
-                                        <FireStreak
-                                          streak={
-                                            player.current_win_streak || 0
-                                          }
-                                        />
-                                      </div>
-
-                                      {/* ELO Display - only for ranked players */}
-                                      {player.is_ranked && (
-                                        <div className="bg-gray-700 px-4 py-2 rounded-full mb-2">
-                                          <span className="text-yellow-500 font-bold text-lg">
-                                            {player.elo} ELO
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      {/* Main Character */}
-                                      {player.main_character && (
-                                        <div className="bg-blue-900 bg-opacity-50 px-3 py-1 rounded-full border border-blue-500 flex items-center gap-2">
-                                          <span className="text-blue-300 text-sm font-medium">
-                                            Main: {player.main_character}
-                                          </span>
-                                          <CharacterIcon
-                                            characterName={
-                                              player.main_character
+                                        <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
+                                          <h3 className="max-w-full truncate text-lg font-bold text-white">
+                                            {player.display_name || player.name}
+                                          </h3>
+                                          {player.country &&
+                                            isValidCountryCode(
+                                              player.country
+                                            ) && (
+                                              <ReactCountryFlag
+                                                countryCode={player.country.toUpperCase()}
+                                                svg
+                                                style={{
+                                                  width: "1.5rem",
+                                                  height: "1.1rem",
+                                                }}
+                                              />
+                                            )}
+                                          <FireStreak
+                                            streak={
+                                              player.current_win_streak || 0
                                             }
-                                            size="sm"
-                                            className="flex-shrink-0"
                                           />
                                         </div>
-                                      )}
 
-                                      {/* Ranking Status */}
-                                      <div
-                                        className={`px-3 py-1 rounded-full border mt-2 ${
-                                          player.is_ranked
-                                            ? "bg-green-900 bg-opacity-50 border-green-500"
-                                            : "bg-orange-900 bg-opacity-50 border-orange-500"
-                                        }`}
-                                      >
-                                        <span
-                                          className={`text-sm font-medium ${
-                                            player.is_ranked
-                                              ? "text-green-300"
-                                              : "text-orange-300"
-                                          }`}
-                                        >
-                                          {player.is_ranked
-                                            ? "Ranked Player"
-                                            : `${player.top_ten_played}/3 vs Top 10`}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    {/* Stats Section */}
-                                    <div className="space-y-4">
-                                      {/* Win/Loss Record */}
-                                      <div className="bg-gray-700 bg-opacity-50 rounded-lg p-4">
-                                        <h4 className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wide">
-                                          Match Record
-                                        </h4>
-                                        <div className="flex justify-between items-center mb-2">
-                                          <div className="flex items-center space-x-2">
-                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                            <span className="text-green-400 font-bold">
-                                              Wins
+                                        {/* ELO Display - only for ranked players */}
+                                        {player.is_ranked && (
+                                          <div className="rounded-full bg-gray-700 px-3 py-1">
+                                            <span className="text-base font-bold text-yellow-500">
+                                              {player.elo} ELO
                                             </span>
                                           </div>
-                                          <span className="text-white font-bold text-lg">
-                                            {player.total_wins || 0}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center mb-3">
-                                          <div className="flex items-center space-x-2">
-                                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                                            <span className="text-red-400 font-bold">
-                                              Losses
+                                        )}
+
+                                        {/* Main Character */}
+                                        {player.main_character && (
+                                          <div className="flex max-w-full items-center gap-2 rounded-full border border-blue-500 bg-blue-900/50 px-3 py-1">
+                                            <span className="min-w-0 truncate text-xs font-medium text-blue-300">
+                                              Main: {player.main_character}
                                             </span>
+                                            <CharacterIcon
+                                              characterName={
+                                                player.main_character
+                                              }
+                                              size="sm"
+                                              className="flex-shrink-0"
+                                            />
                                           </div>
-                                          <span className="text-white font-bold text-lg">
-                                            {player.total_losses || 0}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-gray-400 font-medium">
-                                            Win Rate
-                                          </span>
-                                          <span className="text-yellow-400 font-bold">
-                                            {winRate}%
-                                          </span>
-                                        </div>
+                                        )}
+
                                       </div>
 
-                                      {/* Combat Stats */}
-                                      <div className="bg-gray-700 bg-opacity-50 rounded-lg p-4">
-                                        <h4 className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wide">
-                                          Combat Stats
-                                        </h4>
-                                        <div className="grid grid-cols-3 gap-4 text-center">
-                                          <div>
-                                            <div className="text-orange-400 font-bold text-lg">
-                                              {player.total_kos || 0}
-                                            </div>
-                                            <div className="text-gray-400 text-xs uppercase">
-                                              KOs
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="text-purple-400 font-bold text-lg">
-                                              {player.total_falls || 0}
-                                            </div>
-                                            <div className="text-gray-400 text-xs uppercase">
-                                              Falls
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="text-red-400 font-bold text-lg">
-                                              {player.total_sds || 0}
-                                            </div>
-                                            <div className="text-gray-400 text-xs uppercase">
-                                              SDs
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      {/* Additional Stats */}
-                                      <div className="grid grid-cols-2 gap-2 text-center">
-                                        <div className="bg-gray-700 bg-opacity-30 rounded-lg p-2">
-                                          <div className="text-blue-400 font-bold">
-                                            {player.matches}
-                                          </div>
-                                          <div className="text-gray-400 text-xs">
-                                            Matches
-                                          </div>
-                                        </div>
-                                        <div className="bg-gray-700 bg-opacity-30 rounded-lg p-2">
-                                          <div className="text-cyan-400 font-bold">
-                                            {(player.total_kos || 0) > 0 &&
-                                            (player.total_falls || 0) +
-                                              (player.total_sds || 0) >
-                                              0
-                                              ? (
-                                                  (player.total_kos || 0) /
-                                                  ((player.total_falls || 0) +
-                                                    (player.total_sds || 0))
-                                                ).toFixed(2)
-                                              : "0.00"}
-                                          </div>
-                                          <div className="text-gray-400 text-xs">
-                                            K/D Ratio
-                                          </div>
-                                        </div>
-                                      </div>
+                                      {/* Stats Section */}
+                                      <PlayerStatsSummary
+                                        player={player}
+                                        winRate={winRate}
+                                      />
                                     </div>
 
-                                    <div className="mt-4">
+                                    <div className="mt-3">
                                       <PlayerEloHistoryPanel
                                         player={player}
                                         range={selectedEloRange}
@@ -6319,7 +6301,7 @@ export default function SmashTournamentELO({
                                     </div>
 
                                     {/* Card Actions */}
-                                    <div className="mt-4 space-y-2 border-t border-gray-600 pt-4">
+                                    <div className="mt-3 grid grid-cols-1 gap-2 border-t border-gray-600 pt-3 sm:grid-cols-2">
                                       <button
                                         onClick={() =>
                                           handleViewTopCharacters(player.id)
@@ -6347,7 +6329,7 @@ export default function SmashTournamentELO({
                                             `/matches?${params.toString()}`
                                           );
                                         }}
-                                        className="w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
+                                        className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
                                       >
                                         View Match History
                                       </button>
@@ -6401,182 +6383,87 @@ export default function SmashTournamentELO({
                                   <div
                                     key={player.id}
                                     id={`player-${player.id}`}
-                                    className="relative rounded-xl border border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900 p-5 shadow-lg transition-colors duration-200 hover:border-gray-600"
+                                    className="relative rounded-xl border border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900 p-4 shadow-lg transition-colors duration-200 hover:border-gray-600"
                                   >
                                     {/* No rank badge for unranked players */}
                                     {player.inactive && (
-                                      <div className="absolute top-4 right-4">
-                                        <div className="rounded-full border border-gray-500 bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300 shadow-lg">
+                                      <div className="absolute right-3 top-3 z-10">
+                                        <div className="rounded-full border border-gray-500 bg-gray-800 px-2.5 py-1 text-xs font-bold text-gray-300 shadow-lg">
                                           Inactive
                                         </div>
                                       </div>
                                     )}
 
-                                    {/* Player Avatar and Info */}
-                                    <div className="flex flex-col items-center mb-6">
-                                      <div className="relative mb-4">
+                                    <div
+                                      className={`grid gap-4 sm:grid-cols-[minmax(135px,0.8fr)_minmax(0,1.2fr)] sm:items-stretch ${
+                                        player.inactive ? "pt-7" : ""
+                                      }`}
+                                    >
+                                      {/* Player Avatar and Info */}
+                                      <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-gray-950/20 p-3 text-center">
                                         <ProfilePicture
                                           player={player}
-                                          size="xl"
+                                          size="lg"
                                           borderWidth="border-4"
                                           additionalClasses="shadow-xl bg-gradient-to-br from-gray-600 to-gray-700"
                                         />
-                                      </div>
 
-                                      <div className="flex items-center justify-center mb-1">
-                                        <h3 className="text-xl font-bold text-white text-center">
-                                          {player.display_name || player.name}
-                                        </h3>
-                                        {player.country &&
-                                          isValidCountryCode(
-                                            player.country
-                                          ) && (
-                                            <ReactCountryFlag
-                                              countryCode={player.country.toUpperCase()}
-                                              svg
-                                              style={{
-                                                width: "2rem",
-                                                height: "1.5rem",
-                                                marginLeft: "0.5rem",
-                                              }}
-                                            />
-                                          )}
-                                        <FireStreak
-                                          streak={
-                                            player.current_win_streak || 0
-                                          }
-                                        />
-                                      </div>
-
-                                      {/* No ELO for unranked players */}
-
-                                      {/* Main Character */}
-                                      {player.main_character && (
-                                        <div className="bg-blue-900 bg-opacity-50 px-3 py-1 rounded-full border border-blue-500 flex items-center gap-2">
-                                          <span className="text-blue-300 text-sm font-medium">
-                                            Main: {player.main_character}
-                                          </span>
-                                          <CharacterIcon
-                                            characterName={
-                                              player.main_character
+                                        <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
+                                          <h3 className="max-w-full truncate text-lg font-bold text-white">
+                                            {player.display_name || player.name}
+                                          </h3>
+                                          {player.country &&
+                                            isValidCountryCode(
+                                              player.country
+                                            ) && (
+                                              <ReactCountryFlag
+                                                countryCode={player.country.toUpperCase()}
+                                                svg
+                                                style={{
+                                                  width: "1.5rem",
+                                                  height: "1.1rem",
+                                                }}
+                                              />
+                                            )}
+                                          <FireStreak
+                                            streak={
+                                              player.current_win_streak || 0
                                             }
-                                            size="sm"
-                                            className="flex-shrink-0"
                                           />
                                         </div>
-                                      )}
 
-                                      {/* Ranking Status */}
-                                      <div className="bg-orange-900 bg-opacity-50 px-3 py-1 rounded-full border border-orange-500 mt-2">
-                                        <span className="text-orange-300 text-sm font-medium">
-                                          {player.top_ten_played}/3 vs Top 10
-                                        </span>
+                                        {/* Main Character */}
+                                        {player.main_character && (
+                                          <div className="flex max-w-full items-center gap-2 rounded-full border border-blue-500 bg-blue-900/50 px-3 py-1">
+                                            <span className="min-w-0 truncate text-xs font-medium text-blue-300">
+                                              Main: {player.main_character}
+                                            </span>
+                                            <CharacterIcon
+                                              characterName={
+                                                player.main_character
+                                              }
+                                              size="sm"
+                                              className="flex-shrink-0"
+                                            />
+                                          </div>
+                                        )}
+
+                                        {/* Ranking Status */}
+                                        <div className="rounded-full border border-orange-500 bg-orange-900/50 px-3 py-1">
+                                          <span className="text-xs font-medium text-orange-300">
+                                            {player.top_ten_played}/3 vs Top 10
+                                          </span>
+                                        </div>
                                       </div>
+
+                                      {/* Stats Section */}
+                                      <PlayerStatsSummary
+                                        player={player}
+                                        winRate={winRate}
+                                      />
                                     </div>
 
-                                    {/* Stats Section */}
-                                    <div className="space-y-4">
-                                      {/* Win/Loss Record */}
-                                      <div className="bg-gray-700 bg-opacity-50 rounded-lg p-4">
-                                        <h4 className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wide">
-                                          Match Record
-                                        </h4>
-                                        <div className="flex justify-between items-center mb-2">
-                                          <div className="flex items-center space-x-2">
-                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                            <span className="text-green-400 font-bold">
-                                              Wins
-                                            </span>
-                                          </div>
-                                          <span className="text-white font-bold text-lg">
-                                            {player.total_wins || 0}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center mb-3">
-                                          <div className="flex items-center space-x-2">
-                                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                                            <span className="text-red-400 font-bold">
-                                              Losses
-                                            </span>
-                                          </div>
-                                          <span className="text-white font-bold text-lg">
-                                            {player.total_losses || 0}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-gray-400 font-medium">
-                                            Win Rate
-                                          </span>
-                                          <span className="text-yellow-400 font-bold">
-                                            {winRate}%
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      {/* Combat Stats */}
-                                      <div className="bg-gray-700 bg-opacity-50 rounded-lg p-4">
-                                        <h4 className="text-gray-300 text-sm font-semibold mb-3 uppercase tracking-wide">
-                                          Combat Stats
-                                        </h4>
-                                        <div className="grid grid-cols-3 gap-4 text-center">
-                                          <div>
-                                            <div className="text-orange-400 font-bold text-lg">
-                                              {player.total_kos || 0}
-                                            </div>
-                                            <div className="text-gray-400 text-xs uppercase">
-                                              KOs
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="text-purple-400 font-bold text-lg">
-                                              {player.total_falls || 0}
-                                            </div>
-                                            <div className="text-gray-400 text-xs uppercase">
-                                              Falls
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="text-red-400 font-bold text-lg">
-                                              {player.total_sds || 0}
-                                            </div>
-                                            <div className="text-gray-400 text-xs uppercase">
-                                              SDs
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      {/* Additional Stats */}
-                                      <div className="grid grid-cols-2 gap-2 text-center">
-                                        <div className="bg-gray-700 bg-opacity-30 rounded-lg p-2">
-                                          <div className="text-blue-400 font-bold">
-                                            {player.matches}
-                                          </div>
-                                          <div className="text-gray-400 text-xs">
-                                            Matches
-                                          </div>
-                                        </div>
-                                        <div className="bg-gray-700 bg-opacity-30 rounded-lg p-2">
-                                          <div className="text-cyan-400 font-bold">
-                                            {(player.total_kos || 0) > 0 &&
-                                            (player.total_falls || 0) +
-                                              (player.total_sds || 0) >
-                                              0
-                                              ? (
-                                                  (player.total_kos || 0) /
-                                                  ((player.total_falls || 0) +
-                                                    (player.total_sds || 0))
-                                                ).toFixed(2)
-                                              : "0.00"}
-                                          </div>
-                                          <div className="text-gray-400 text-xs">
-                                            K/D Ratio
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    <div className="mt-4">
+                                    <div className="mt-3">
                                       <PlayerEloHistoryPanel
                                         player={player}
                                         range={selectedEloRange}
@@ -6610,7 +6497,7 @@ export default function SmashTournamentELO({
                                     </div>
 
                                     {/* Card Actions */}
-                                    <div className="mt-4 space-y-2 border-t border-gray-600 pt-4">
+                                    <div className="mt-3 grid grid-cols-1 gap-2 border-t border-gray-600 pt-3 sm:grid-cols-2">
                                       <button
                                         onClick={() =>
                                           handleViewTopCharacters(player.id)
@@ -6638,7 +6525,7 @@ export default function SmashTournamentELO({
                                             `/matches?${params.toString()}`
                                           );
                                         }}
-                                        className="w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
+                                        className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
                                       >
                                         View Match History
                                       </button>
