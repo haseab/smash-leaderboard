@@ -30,6 +30,29 @@ const MATCH_ORDER_BY_ASC: Prisma.matchesOrderByWithRelationInput[] = [
   { id: "asc" },
 ];
 
+const isValidDateInput = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const parseUtcDate = (value: string | null) => {
+  if (!value || !isValidDateInput(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+};
+
 type MatchWithParticipants = Prisma.matchesGetPayload<{
   include: typeof MATCH_INCLUDE;
 }>;
@@ -253,11 +276,29 @@ export async function GET(request: Request) {
     const matchIdParam = searchParams.get("matchId");
     const directionParam = searchParams.get("direction");
     const cursorMatchIdParam = searchParams.get("cursorMatchId");
+    const startDateInput = searchParams.get("startDate");
+    const endDateInput = searchParams.get("endDate");
+    const startDate = parseUtcDate(startDateInput);
+    const endDate = parseUtcDate(endDateInput);
     const contextLimit = parsePositiveInt(
       searchParams.get("contextLimit"),
       2,
       20
     );
+
+    if ((startDateInput && !startDate) || (endDateInput && !endDate)) {
+      return NextResponse.json(
+        { error: "Invalid date filter" },
+        { status: 400 }
+      );
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      return NextResponse.json(
+        { error: "Start date must be on or before the end date" },
+        { status: 400 }
+      );
+    }
 
     if (
       directionParam &&
@@ -304,6 +345,8 @@ export async function GET(request: Request) {
       matchIdParam,
       directionParam,
       cursorMatchIdParam,
+      startDate: startDateInput,
+      endDate: endDateInput,
     });
 
     if (playerFilter.length > 0 && !allPlayerFiltersResolved) {
@@ -336,6 +379,15 @@ export async function GET(request: Request) {
         },
       },
     ];
+
+    if (startDate || endDate) {
+      whereConditions.push({
+        created_at: {
+          ...(startDate ? { gte: startDate } : {}),
+          ...(endDate ? { lt: addDays(endDate, 1) } : {}),
+        },
+      });
+    }
 
     if (teamRankingId !== null) {
       const qualifyingTeamMatchIds =

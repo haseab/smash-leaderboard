@@ -62,6 +62,26 @@ interface MatchupApiResponse {
   error?: string;
 }
 
+interface RecentMatchupSnapshotParticipant extends MatchupExplorerPlayer {
+  character: string;
+  kos: number;
+  falls: number;
+  sds: number;
+  won: boolean;
+}
+
+interface RecentMatchupSnapshot {
+  matchId: number;
+  created_at: string;
+  player1: RecentMatchupSnapshotParticipant;
+  player2: RecentMatchupSnapshotParticipant;
+}
+
+interface RecentMatchupsApiResponse {
+  recentMatchups: RecentMatchupSnapshot[];
+  error?: string;
+}
+
 interface MatchupExplorerProps {
   players: MatchupExplorerPlayer[];
   isRefreshing: boolean;
@@ -248,6 +268,44 @@ function PlayerAvatar({
     >
       {getInitials(player)}
     </div>
+  );
+}
+
+function RecentMatchupCard({
+  matchup,
+  onOpen,
+}: {
+  matchup: RecentMatchupSnapshot;
+  onOpen: (matchup: RecentMatchupSnapshot) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(matchup)}
+      className="group rounded-2xl border border-gray-700 bg-gray-800/75 p-4 text-left shadow-lg transition-colors hover:border-blue-500/50 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <PlayerAvatar player={matchup.player1} size="md" />
+          <div className="min-w-0 truncate text-lg font-bold text-white">
+            {getPlayerLabel(matchup.player1)}
+          </div>
+        </div>
+
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-gray-700 bg-gray-950/50 text-xs font-bold uppercase tracking-wider text-gray-400">
+          vs
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-3 text-right">
+          <div className="min-w-0 truncate text-lg font-bold text-white">
+            {getPlayerLabel(matchup.player2)}
+          </div>
+          <PlayerAvatar player={matchup.player2} size="md" />
+        </div>
+
+        <ChevronDown className="h-4 w-4 flex-shrink-0 -rotate-90 text-gray-500 transition-colors group-hover:text-blue-300" />
+      </div>
+    </button>
   );
 }
 
@@ -676,6 +734,13 @@ export default function MatchupExplorer({
   const [matchup, setMatchup] = useState<MatchupApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recentMatchups, setRecentMatchups] = useState<
+    RecentMatchupSnapshot[]
+  >([]);
+  const [recentMatchupsLoading, setRecentMatchupsLoading] = useState(false);
+  const [recentMatchupsError, setRecentMatchupsError] = useState<string | null>(
+    null
+  );
   const [customStartInput, setCustomStartInput] = useState("");
   const [customEndInput, setCustomEndInput] = useState("");
   const [recentMatchLimit, setRecentMatchLimit] = useState(5);
@@ -735,6 +800,50 @@ export default function MatchupExplorer({
     startDate,
     endDate,
   ]);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    const loadRecentMatchups = async () => {
+      setRecentMatchupsLoading(true);
+      setRecentMatchupsError(null);
+
+      try {
+        const response = await fetch("/api/matchups?recent=1&recentLimit=6", {
+          cache: "no-store",
+          signal: abortController.signal,
+        });
+        const data = (await response.json()) as RecentMatchupsApiResponse;
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to fetch recent matchups.");
+        }
+
+        setRecentMatchups(data.recentMatchups || []);
+      } catch (fetchError) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setRecentMatchups([]);
+        setRecentMatchupsError(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "Failed to fetch recent matchups."
+        );
+      } finally {
+        if (!abortController.signal.aborted) {
+          setRecentMatchupsLoading(false);
+        }
+      }
+    };
+
+    void loadRecentMatchups();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [refreshToken]);
 
   const updateQuery = (next: MatchupQueryState) => {
     const params = new URLSearchParams();
@@ -1047,6 +1156,21 @@ export default function MatchupExplorer({
     router.push(`/matches?${params.toString()}`);
   };
 
+  const openRecentMatchup = (recentMatchup: RecentMatchupSnapshot) => {
+    updateQuery({
+      ...baseQueryState,
+      player1: recentMatchup.player1.id.toString(),
+      player2: recentMatchup.player2.id.toString(),
+      player1Character: "",
+      player2Character: "",
+      player1ExcludedCharacters: [],
+      player2ExcludedCharacters: [],
+      timeRange: "all",
+      startDate: "",
+      endDate: "",
+    });
+  };
+
   const recentMatchCards: MatchCardMatch[] =
     matchup && selectedPlayer1 && selectedPlayer2
       ? matchup.recentMatches.map((match) => ({
@@ -1161,8 +1285,43 @@ export default function MatchupExplorer({
       )}
 
       {!bothPlayersSelected ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-16 text-center text-gray-400">
-          Choose two players to unlock matchup filters and results.
+        <div className="mt-6 space-y-6">
+          <div className="rounded-2xl border border-gray-700 bg-gray-900/80 p-5 shadow-lg">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <h3 className="text-xl font-bold text-white">Recent Matchups</h3>
+              {recentMatchupsLoading && (
+                <div className="rounded-full border border-blue-500/30 bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-100">
+                  Loading
+                </div>
+              )}
+            </div>
+
+            {recentMatchupsError ? (
+              <div className="mt-4 rounded-xl border border-red-500/40 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+                {recentMatchupsError}
+              </div>
+            ) : recentMatchups.length > 0 ? (
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                {recentMatchups.map((recentMatchup) => (
+                  <RecentMatchupCard
+                    key={recentMatchup.matchId}
+                    matchup={recentMatchup}
+                    onOpen={openRecentMatchup}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-dashed border-gray-700 bg-gray-800/40 px-4 py-8 text-center text-sm text-gray-400">
+                {recentMatchupsLoading
+                  ? "Loading recent matchups..."
+                  : "No recent 1v1 matchups found."}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-12 text-center text-gray-400">
+            Choose two players to unlock matchup filters and results.
+          </div>
         </div>
       ) : !selectedPlayer1 || !selectedPlayer2 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-950/30 px-6 py-16 text-center text-red-100">

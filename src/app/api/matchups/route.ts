@@ -1,5 +1,6 @@
 import { resolvePlayerPairByQueryValues } from "@/lib/server/playerQueryResolver";
 import { prisma } from "@/lib/prisma";
+import { normalizeAppUrl } from "@/lib/site-url";
 import {
   expandCharacterAliasQueryValues,
   getCanonicalCharacterName,
@@ -41,6 +42,31 @@ interface MatchupSummaryRow {
   player1_stats: MatchupStats;
   player2_stats: MatchupStats;
   recent_matches: MatchupRecentMatch[];
+}
+
+interface RecentMatchupSnapshotRow {
+  match_id: bigint;
+  created_at: Date;
+  player1_id: bigint;
+  player1_name: string | null;
+  player1_display_name: string | null;
+  player1_picture: string | null;
+  player1_country: string | null;
+  player1_character: string;
+  player1_kos: number;
+  player1_falls: number;
+  player1_sds: number;
+  player1_won: boolean;
+  player2_id: bigint;
+  player2_name: string | null;
+  player2_display_name: string | null;
+  player2_picture: string | null;
+  player2_country: string | null;
+  player2_character: string;
+  player2_kos: number;
+  player2_falls: number;
+  player2_sds: number;
+  player2_won: boolean;
 }
 
 type MatchupTimeRange = "all" | "7d" | "30d" | "1y" | "custom";
@@ -106,6 +132,143 @@ export async function GET(request: Request) {
     const recentLimit = Number.isFinite(recentLimitInput)
       ? Math.min(Math.max(Math.floor(recentLimitInput), 5), 100)
       : 5;
+
+    if (searchParams.get("recent") === "1") {
+      const recentMatchups = await prisma.$queryRaw<RecentMatchupSnapshotRow[]>(
+        Prisma.sql`
+          WITH visible_one_v_ones AS (
+            SELECT
+              m.id,
+              m.created_at,
+              LEAST(MIN(mp.player), MAX(mp.player)) AS player_one_key,
+              GREATEST(MIN(mp.player), MAX(mp.player)) AS player_two_key
+            FROM matches m
+            JOIN match_participants mp
+              ON mp.match_id = m.id
+             AND mp.is_cpu = false
+            JOIN players p
+              ON p.id = mp.player
+            WHERE m.archived = false
+            GROUP BY m.id, m.created_at
+            HAVING COUNT(*) = 2
+               AND COUNT(DISTINCT mp.player) = 2
+               AND BOOL_AND(p.banned = false)
+          ),
+          latest_unique_one_v_ones AS (
+            SELECT
+              id,
+              created_at
+            FROM (
+              SELECT
+                *,
+                ROW_NUMBER() OVER (
+                  PARTITION BY player_one_key, player_two_key
+                  ORDER BY created_at DESC, id DESC
+                ) AS pair_recency
+              FROM visible_one_v_ones
+            ) unique_candidates
+            WHERE pair_recency = 1
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${recentLimit}
+          ),
+          ranked_participants AS (
+            SELECT
+              vom.id AS match_id,
+              vom.created_at,
+              mp.player AS player_id,
+              p.name,
+              p.display_name,
+              p.picture,
+              p.country,
+              mp.smash_character,
+              mp.total_kos,
+              mp.total_falls,
+              mp.total_sds,
+              mp.has_won,
+              ROW_NUMBER() OVER (
+                PARTITION BY vom.id
+                ORDER BY
+                  CASE WHEN mp.has_won THEN 0 ELSE 1 END,
+                  mp.player ASC
+              ) AS participant_order
+            FROM latest_unique_one_v_ones vom
+            JOIN match_participants mp
+              ON mp.match_id = vom.id
+             AND mp.is_cpu = false
+            JOIN players p
+              ON p.id = mp.player
+             AND p.banned = false
+          )
+          SELECT
+            p1.match_id,
+            p1.created_at,
+            p1.player_id AS player1_id,
+            p1.name AS player1_name,
+            p1.display_name AS player1_display_name,
+            p1.picture AS player1_picture,
+            p1.country AS player1_country,
+            p1.smash_character AS player1_character,
+            p1.total_kos AS player1_kos,
+            p1.total_falls AS player1_falls,
+            p1.total_sds AS player1_sds,
+            p1.has_won AS player1_won,
+            p2.player_id AS player2_id,
+            p2.name AS player2_name,
+            p2.display_name AS player2_display_name,
+            p2.picture AS player2_picture,
+            p2.country AS player2_country,
+            p2.smash_character AS player2_character,
+            p2.total_kos AS player2_kos,
+            p2.total_falls AS player2_falls,
+            p2.total_sds AS player2_sds,
+            p2.has_won AS player2_won
+          FROM ranked_participants p1
+          JOIN ranked_participants p2
+            ON p2.match_id = p1.match_id
+           AND p2.participant_order = 2
+          WHERE p1.participant_order = 1
+          ORDER BY p1.created_at DESC, p1.match_id DESC
+        `
+      );
+
+      return NextResponse.json({
+        recentMatchups: recentMatchups.map((matchup) => ({
+          matchId: Number(matchup.match_id),
+          created_at: matchup.created_at.toISOString(),
+          player1: {
+            id: Number(matchup.player1_id),
+            name:
+              matchup.player1_name ||
+              matchup.player1_display_name ||
+              "Unknown Player",
+            display_name: matchup.player1_display_name,
+            picture: normalizeAppUrl(matchup.player1_picture),
+            country: matchup.player1_country,
+            character: getCanonicalCharacterName(matchup.player1_character),
+            kos: matchup.player1_kos,
+            falls: matchup.player1_falls,
+            sds: matchup.player1_sds,
+            won: matchup.player1_won,
+          },
+          player2: {
+            id: Number(matchup.player2_id),
+            name:
+              matchup.player2_name ||
+              matchup.player2_display_name ||
+              "Unknown Player",
+            display_name: matchup.player2_display_name,
+            picture: normalizeAppUrl(matchup.player2_picture),
+            country: matchup.player2_country,
+            character: getCanonicalCharacterName(matchup.player2_character),
+            kos: matchup.player2_kos,
+            falls: matchup.player2_falls,
+            sds: matchup.player2_sds,
+            won: matchup.player2_won,
+          },
+        })),
+      });
+    }
+
     const playerOneQueryValue = searchParams.get("player1")?.trim() || "";
     const playerTwoQueryValue = searchParams.get("player2")?.trim() || "";
     const { playerOne, playerTwo } = await resolvePlayerPairByQueryValues([
