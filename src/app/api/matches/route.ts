@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import {
+  parseMatchResultFilter,
+  parseMatchStockFilter,
+} from "@/lib/matchOutcomeFilters";
 import { resolvePlayersByQueryValues } from "@/lib/server/playerQueryResolver";
 import {
   expandCharacterAliasQueryValues,
@@ -253,6 +257,50 @@ const getQualifyingTeamRankingMatchIds = async (teamRankingId: number) => {
   return prisma.$queryRawUnsafe<Array<{ id: bigint }>>(query, teamRankingId);
 };
 
+const getStockFilteredMatchIds = async (stockRemaining: number) =>
+  prisma.$queryRaw<Array<{ id: bigint }>>(Prisma.sql`
+    SELECT m.id
+    FROM matches m
+    WHERE m.archived = false
+      AND NOT EXISTS (
+        SELECT 1
+        FROM match_participants mp_hidden
+        JOIN players p_hidden ON p_hidden.id = mp_hidden.player
+        WHERE mp_hidden.match_id = m.id
+          AND mp_hidden.is_cpu = false
+          AND p_hidden.banned = true
+      )
+      AND (
+        SELECT COUNT(*)
+        FROM match_participants mp_count
+        WHERE mp_count.match_id = m.id
+          AND mp_count.is_cpu = false
+      ) = 2
+      AND (
+        SELECT COUNT(*)
+        FROM match_participants mp_winners
+        WHERE mp_winners.match_id = m.id
+          AND mp_winners.is_cpu = false
+          AND mp_winners.has_won = true
+      ) = 1
+      AND EXISTS (
+        SELECT 1
+        FROM match_participants mp_loser
+        WHERE mp_loser.match_id = m.id
+          AND mp_loser.is_cpu = false
+          AND mp_loser.has_won = false
+          AND (mp_loser.total_falls + mp_loser.total_sds) >= 3
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM match_participants mp_winner
+        WHERE mp_winner.match_id = m.id
+          AND mp_winner.is_cpu = false
+          AND mp_winner.has_won = true
+          AND (3 - (mp_winner.total_falls + mp_winner.total_sds)) = ${stockRemaining}
+      )
+  `);
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -280,6 +328,8 @@ export async function GET(request: Request) {
     const endDateInput = searchParams.get("endDate");
     const startDate = parseUtcDate(startDateInput);
     const endDate = parseUtcDate(endDateInput);
+    const resultFilter = parseMatchResultFilter(searchParams.get("result"));
+    const stockFilter = parseMatchStockFilter(searchParams.get("stock"));
     const contextLimit = parsePositiveInt(
       searchParams.get("contextLimit"),
       2,
@@ -347,6 +397,8 @@ export async function GET(request: Request) {
       cursorMatchIdParam,
       startDate: startDateInput,
       endDate: endDateInput,
+      resultFilter,
+      stockFilter,
     });
 
     if (playerFilter.length > 0 && !allPlayerFiltersResolved) {
@@ -402,6 +454,23 @@ export async function GET(request: Request) {
 
       whereConditions.push({
         id: { in: qualifyingTeamMatchIds.map((match) => match.id) },
+      });
+    }
+
+    if (stockFilter !== "all") {
+      const stockFilteredMatchIds = await getStockFilteredMatchIds(
+        Number(stockFilter)
+      );
+
+      if (stockFilteredMatchIds.length === 0 && !matchIdParam) {
+        return NextResponse.json({
+          matches: [],
+          pagination: { page, limit, hasMore: false },
+        });
+      }
+
+      whereConditions.push({
+        id: { in: stockFilteredMatchIds.map((match) => match.id) },
       });
     }
 
@@ -550,6 +619,21 @@ export async function GET(request: Request) {
         },
       }));
       whereConditions.push(...characterConditions);
+    }
+
+    if (resultFilter !== "all" && resolvedPlayerFilterIds.length > 0) {
+      const targetHasWon = resultFilter === "wins";
+      const resultPerspectivePlayerId = resolvedPlayerFilterIds[0];
+
+      whereConditions.push({
+        match_participants: {
+          some: {
+            player: resultPerspectivePlayerId,
+            is_cpu: false,
+            has_won: targetHasWon,
+          },
+        },
+      });
     }
 
     if (matchIdParam) {

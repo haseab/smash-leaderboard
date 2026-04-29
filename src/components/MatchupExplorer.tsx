@@ -1,8 +1,21 @@
 "use client";
 
 import CharacterProfilePicture from "@/components/CharacterProfilePicture";
+import DateRangeFilterBar from "@/components/DateRangeFilterBar";
 import MatchCard, { MatchCardMatch } from "@/components/MatchCard";
+import MatchOutcomeFilters from "@/components/MatchOutcomeFilters";
 import PlayerDropdown from "@/components/PlayerDropdown";
+import {
+  formatDateInputValue,
+  formatDateValue,
+  shiftDateByDays,
+  shiftDateByYears,
+} from "@/lib/dateRange";
+import {
+  DEFAULT_MATCH_OUTCOME_FILTERS,
+  getActiveMatchOutcomeFilterCount,
+  type MatchOutcomeFilterState,
+} from "@/lib/matchOutcomeFilters";
 import {
   findPlayerByQueryValue,
   getPlayerQueryLabel,
@@ -30,6 +43,8 @@ interface MatchupParticipantStats {
   totalFalls: number;
   totalSds: number;
   longestWinStreak: number;
+  threeStocks: number;
+  twoStocks: number;
 }
 
 type MatchupTimeRange = "all" | "7d" | "30d" | "1y" | "custom";
@@ -43,6 +58,7 @@ interface MatchupApiResponse {
   };
   player1: MatchupParticipantStats;
   player2: MatchupParticipantStats;
+  recentMatchesCount: number;
   recentMatches: Array<{
     id: number;
     created_at: string;
@@ -143,29 +159,6 @@ const getInitials = (player: MatchupExplorerPlayer) =>
     .join("")
     .toUpperCase()
     .slice(0, 2);
-
-const formatDateValue = (value: string) =>
-  new Date(`${value}T00:00:00`).toLocaleDateString();
-
-const formatDateInputValue = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-};
-
-const shiftDateByDays = (date: Date, days: number) => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-};
-
-const shiftDateByYears = (date: Date, years: number) => {
-  const next = new Date(date);
-  next.setFullYear(next.getFullYear() + years);
-  return next;
-};
 
 const getPresetDateInputs = (
   timeRange: Exclude<MatchupTimeRange, "custom">
@@ -711,6 +704,22 @@ function PlayerSummaryCard({
             {stats.totalFalls + stats.totalSds}
           </div>
         </div>
+        <div className="rounded-xl bg-black/20 p-3">
+          <div className="whitespace-nowrap text-[0.7rem] uppercase tracking-[0.08em] text-gray-400">
+            3 Stocks
+          </div>
+          <div className="mt-1 text-xl font-semibold text-yellow-300">
+            {stats.threeStocks}
+          </div>
+        </div>
+        <div className="rounded-xl bg-black/20 p-3">
+          <div className="whitespace-nowrap text-[0.7rem] uppercase tracking-[0.08em] text-gray-400">
+            2 Stocks
+          </div>
+          <div className="mt-1 text-xl font-semibold text-slate-200">
+            {stats.twoStocks}
+          </div>
+        </div>
       </div>
       <button
         type="button"
@@ -744,6 +753,8 @@ export default function MatchupExplorer({
   const [customStartInput, setCustomStartInput] = useState("");
   const [customEndInput, setCustomEndInput] = useState("");
   const [recentMatchLimit, setRecentMatchLimit] = useState(5);
+  const [recentMatchOutcomeFilters, setRecentMatchOutcomeFilters] =
+    useState<MatchOutcomeFilterState>(DEFAULT_MATCH_OUTCOME_FILTERS);
   const [showUtcTime, setShowUtcTime] = useState(false);
 
   const player1QueryValue = searchParams.get("player1") || "";
@@ -769,6 +780,8 @@ export default function MatchupExplorer({
   const timeRange = parseMatchupTimeRange(searchParams.get("timeRange"));
   const startDate = searchParams.get("startDate") || "";
   const endDate = searchParams.get("endDate") || "";
+  const recentMatchResultFilter = recentMatchOutcomeFilters.result;
+  const recentMatchStockFilter = recentMatchOutcomeFilters.stock;
 
   const selectedPlayer1 = findPlayerByQueryValue(player1QueryValue, players);
   const selectedPlayer2 = findPlayerByQueryValue(player2QueryValue, players);
@@ -799,6 +812,8 @@ export default function MatchupExplorer({
     timeRange,
     startDate,
     endDate,
+    recentMatchResultFilter,
+    recentMatchStockFilter,
   ]);
 
   useEffect(() => {
@@ -963,6 +978,12 @@ export default function MatchupExplorer({
           params.set("startDate", startDate);
           params.set("endDate", endDate);
         }
+        if (recentMatchResultFilter !== "all") {
+          params.set("recentResult", recentMatchResultFilter);
+        }
+        if (recentMatchStockFilter !== "all") {
+          params.set("recentStock", recentMatchStockFilter);
+        }
 
         const response = await fetch(`/api/matchups?${params.toString()}`, {
           cache: "no-store",
@@ -1013,6 +1034,8 @@ export default function MatchupExplorer({
     startDate,
     endDate,
     recentMatchLimit,
+    recentMatchResultFilter,
+    recentMatchStockFilter,
     refreshToken,
   ]);
 
@@ -1206,8 +1229,12 @@ export default function MatchupExplorer({
           ],
         }))
       : [];
+  const recentMatchCount = matchup?.recentMatchesCount ?? currentMatchCount;
   const hasMoreRecentMatches =
-    matchup !== null && matchup.totalMatches > recentMatchCards.length;
+    matchup !== null && recentMatchCount > recentMatchCards.length;
+  const activeRecentMatchOutcomeFilterCount = getActiveMatchOutcomeFilterCount(
+    recentMatchOutcomeFilters
+  );
 
   return (
     <div
@@ -1329,74 +1356,25 @@ export default function MatchupExplorer({
         </div>
       ) : (
         <div className="mt-6 space-y-6">
-          <div className="rounded-2xl border border-gray-700 bg-gray-900/80 px-4 py-3 shadow-lg">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                  Date
-                </span>
-                <div className="flex flex-wrap rounded-full border border-gray-700 bg-black/20 p-1">
-                  {timeRangeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() =>
-                        option.value === "custom"
-                          ? handleCustomTimeRangeClick()
-                          : applyPresetTimeRange(option.value)
-                      }
-                      className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors ${
-                        timeRange === option.value
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="rounded-full border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200">
-                  {dateRangeLabel}
-                </div>
-              </div>
+          <DateRangeFilterBar<MatchupTimeRange>
+            presets={timeRangeOptions}
+            selectedPreset={timeRange}
+            onPresetSelect={(nextTimeRange) => {
+              if (nextTimeRange === "custom") {
+                handleCustomTimeRangeClick();
+                return;
+              }
 
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  <span>Start</span>
-                  <input
-                    type="date"
-                    value={customStartInput}
-                    onChange={(event) =>
-                      handleCustomStartChange(event.target.value)
-                    }
-                    className="h-9 w-36 rounded-full border border-gray-600 bg-gray-950 px-3 text-sm font-medium normal-case tracking-normal text-white outline-none transition-colors [color-scheme:dark] focus:border-blue-500"
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  <span>End</span>
-                  <input
-                    type="date"
-                    value={customEndInput}
-                    onChange={(event) =>
-                      handleCustomEndChange(event.target.value)
-                    }
-                    className="h-9 w-36 rounded-full border border-gray-600 bg-gray-950 px-3 text-sm font-medium normal-case tracking-normal text-white outline-none transition-colors [color-scheme:dark] focus:border-blue-500"
-                  />
-                </label>
-                {loading && (
-                  <div className="rounded-full border border-blue-500/30 bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-100">
-                    Refreshing
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {customDateValidationError && (
-              <div className="mt-2 text-sm font-medium text-red-400">
-                {customDateValidationError}
-              </div>
-            )}
-          </div>
+              applyPresetTimeRange(nextTimeRange);
+            }}
+            rangeLabel={dateRangeLabel}
+            startDate={customStartInput}
+            endDate={customEndInput}
+            onStartDateChange={handleCustomStartChange}
+            onEndDateChange={handleCustomEndChange}
+            error={customDateValidationError}
+            loading={loading}
+          />
 
           <>
               <div className="rounded-2xl border border-gray-700 bg-gradient-to-br from-gray-900 to-gray-800 p-6 shadow-lg">
@@ -1423,6 +1401,8 @@ export default function MatchupExplorer({
                         totalFalls: 0,
                         totalSds: 0,
                         longestWinStreak: 0,
+                        threeStocks: 0,
+                        twoStocks: 0,
                       }
                     }
                     selectedCharacter={player1Character}
@@ -1466,11 +1446,11 @@ export default function MatchupExplorer({
                     disabled={!matchup}
                   />
 
-                  <div className="flex flex-col rounded-2xl border border-gray-700 bg-black/20 p-5">
+                  <div className="flex flex-col justify-center rounded-2xl border border-gray-700 bg-black/20 p-6">
                     <div className="text-center text-sm uppercase tracking-[0.2em] text-gray-400">
                       Win Split
                     </div>
-                    <div className="mt-4 flex items-end justify-between gap-3">
+                    <div className="mt-6 flex items-end justify-between gap-5">
                       <div className="text-left">
                         <div className="text-4xl font-black text-red-300">
                           {playerOneWins}
@@ -1491,7 +1471,7 @@ export default function MatchupExplorer({
                         </div>
                       </div>
                     </div>
-                    <div className="mt-5 flex h-4 overflow-hidden rounded-full bg-gray-700">
+                    <div className="mt-7 flex h-4 overflow-hidden rounded-full bg-gray-700">
                       <div
                         className="h-full bg-gradient-to-r from-red-500 to-red-400"
                         style={{ width: `${playerOneShare}%` }}
@@ -1501,7 +1481,7 @@ export default function MatchupExplorer({
                         style={{ width: `${playerTwoShare}%` }}
                       />
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-center">
+                    <div className="mt-6 grid grid-cols-2 gap-4 text-center">
                       <div className="rounded-xl bg-black/20 p-3">
                         <div className="text-xs uppercase tracking-wide text-gray-400">
                           {getPlayerLabel(selectedPlayer1)}
@@ -1519,7 +1499,7 @@ export default function MatchupExplorer({
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 rounded-xl border border-gray-700 bg-gray-900/70 px-3 py-2 text-center">
+                    <div className="mt-5 rounded-xl border border-gray-700 bg-gray-900/70 px-4 py-3 text-center">
                       <div className="text-sm font-semibold text-white">
                         {currentMatchCount} filtered matches
                       </div>
@@ -1539,6 +1519,8 @@ export default function MatchupExplorer({
                         totalFalls: 0,
                         totalSds: 0,
                         longestWinStreak: 0,
+                        threeStocks: 0,
+                        twoStocks: 0,
                       }
                     }
                     selectedCharacter={player2Character}
@@ -1600,23 +1582,25 @@ export default function MatchupExplorer({
                   <div>
                     <h3 className="text-xl font-bold text-white">Recent Matches</h3>
                     <p className="mt-1 text-sm text-gray-400">
-                      Showing {recentMatchCards.length} of {currentMatchCount} matches
+                      Showing {recentMatchCards.length} of {recentMatchCount}{" "}
+                      {activeRecentMatchOutcomeFilterCount > 0
+                        ? "after filters"
+                        : "matches"}
                     </p>
                   </div>
-
-                  {hasMoreRecentMatches && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setRecentMatchLimit((currentLimit) => currentLimit + 5)
-                      }
-                      disabled={loading}
-                      className="inline-flex items-center gap-2 rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {loading ? "Loading..." : "Load 5 More"}
-                    </button>
-                  )}
                 </div>
+
+                <MatchOutcomeFilters
+                  value={recentMatchOutcomeFilters}
+                  onChange={setRecentMatchOutcomeFilters}
+                  resultLabel={
+                    selectedPlayer1
+                      ? `${getPlayerLabel(selectedPlayer1)} result`
+                      : "Result"
+                  }
+                  className="mt-5 border-t border-gray-700/70 pt-5"
+                  compact
+                />
 
                 {recentMatchCards.length > 0 ? (
                   <div className="mt-6 space-y-4">
@@ -1659,7 +1643,9 @@ export default function MatchupExplorer({
                   <div className="mt-6 rounded-2xl border border-dashed border-gray-700 bg-gray-800/40 px-6 py-16 text-center text-gray-400">
                     {loading
                       ? "Loading matchup history..."
-                      : "No recent matches match the current selection."}
+                      : activeRecentMatchOutcomeFilterCount > 0
+                        ? "No recent matches match the result filters."
+                        : "No recent matches match the current selection."}
                   </div>
                 )}
               </div>

@@ -41,6 +41,7 @@ model matches {
   // Relations
   match_participants match_participants[]
   
+  @@index([archived, created_at(sort: Desc), id(sort: Desc)], name: "idx_matches_archived_created_id")
   @@map("matches")
 }
 
@@ -63,6 +64,7 @@ model match_participants {
   
   @@index([is_cpu, match_id])
   @@index([player, match_id(sort: Desc), has_won, is_cpu])
+  @@index([player, is_cpu, match_id(sort: Desc)], name: "idx_match_participants_player_cpu_match")
   @@index([player, smash_character])
   @@index([match_id, player, is_cpu])
   @@map("match_participants")

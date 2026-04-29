@@ -6,6 +6,18 @@ import {
   serializePlayerIdToQueryValue,
   serializePlayerIdsToQueryValues,
 } from "@/lib/playerQuery";
+import {
+  getDateRangeFilterError,
+  getOpenDateRangeLabel,
+  getValidDateQueryValue,
+} from "@/lib/dateRange";
+import {
+  DEFAULT_MATCH_OUTCOME_FILTERS,
+  getActiveMatchOutcomeFilterCount,
+  parseMatchResultFilter,
+  parseMatchStockFilter,
+  type MatchOutcomeFilterState,
+} from "@/lib/matchOutcomeFilters";
 import { Player } from "@/lib/prisma";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import {
@@ -25,9 +37,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import React, { memo, useEffect, useRef, useState } from "react";
 import ReactCountryFlag from "react-country-flag";
 import CharacterDropdown from "./CharacterDropdown";
+import DateRangeFilterBar from "./DateRangeFilterBar";
 import CharacterIcon from "./CharacterIcon";
 import CharacterProfilePicture from "./CharacterProfilePicture";
+import EloHistoryChart, {
+  type EloHistoryPoint,
+} from "./EloHistoryChart";
 import MatchCard from "./MatchCard";
+import MatchOutcomeFilters from "./MatchOutcomeFilters";
 import MatchupExplorer from "./MatchupExplorer";
 import PingDot from "./PingDot";
 import PlayerDropdown, { type PlayerDropdownPlayer } from "./PlayerDropdown";
@@ -153,6 +170,7 @@ interface MatchesApiResponse {
 
 type Tier = "S" | "A" | "B" | "C" | "D" | "E" | "F";
 type CacheTag = "players" | "matches";
+type EloDetailRange = "7d" | "30d" | "1y" | "all";
 type LeaderboardTab =
   | "overall"
   | "unranked"
@@ -333,34 +351,10 @@ const parseCharacterRankingPlayerRowLimit = (
   }
 };
 
-const isDateInputValue = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+const getMatchDateFilterError = getDateRangeFilterError;
 
-const getValidDateQueryValue = (value: string | null) =>
-  value && isDateInputValue(value) ? value : "";
-
-const formatDateValue = (value: string) =>
-  new Date(`${value}T00:00:00`).toLocaleDateString();
-
-const getMatchDateFilterError = (startDate: string, endDate: string) =>
-  startDate && endDate && startDate > endDate
-    ? "Start date must be on or before the end date."
-    : null;
-
-const getMatchDateRangeLabel = (startDate: string, endDate: string) => {
-  if (startDate && endDate) {
-    return `${formatDateValue(startDate)} - ${formatDateValue(endDate)}`;
-  }
-
-  if (startDate) {
-    return `From ${formatDateValue(startDate)}`;
-  }
-
-  if (endDate) {
-    return `Through ${formatDateValue(endDate)}`;
-  }
-
-  return "All Dates";
-};
+const getMatchDateRangeLabel = (startDate: string, endDate: string) =>
+  getOpenDateRangeLabel(startDate, endDate, "All Dates");
 
 // Memoized component for refresh status to prevent unnecessary rerendersO
 const RefreshStatus = memo(
@@ -623,6 +617,127 @@ const LastOneVOneResult = memo(
 );
 
 LastOneVOneResult.displayName = "LastOneVOneResult";
+
+const ELO_RANGE_OPTIONS: Array<{
+  value: EloDetailRange;
+  label: string;
+  chipLabel: string;
+}> = [
+  { value: "7d", label: "7D", chipLabel: "7 days" },
+  { value: "30d", label: "30D", chipLabel: "30 days" },
+  { value: "1y", label: "1Y", chipLabel: "1 year" },
+  { value: "all", label: "All", chipLabel: "All time" },
+];
+
+const getEloDelta = (points: EloHistoryPoint[]) => {
+  if (points.length < 2) {
+    return 0;
+  }
+
+  return points[points.length - 1].elo - points[0].elo;
+};
+
+const formatEloDeltaValue = (delta: number) =>
+  `${delta > 0 ? "+" : ""}${Math.round(delta)}`;
+
+const getEloRangeChipLabel = (range: EloDetailRange) =>
+  ELO_RANGE_OPTIONS.find((option) => option.value === range)?.chipLabel ||
+  "30 days";
+
+const PlayerEloHistoryPanel = memo(
+  ({
+    player,
+    range,
+    points,
+    loading,
+    rangeMenuOpen,
+    onToggleRangeMenu,
+    onRangeChange,
+  }: {
+    player: ExtendedPlayer;
+    range: EloDetailRange;
+    points: EloHistoryPoint[];
+    loading: boolean;
+    rangeMenuOpen: boolean;
+    onToggleRangeMenu: () => void;
+    onRangeChange: (range: EloDetailRange) => void;
+  }) => {
+    const delta = getEloDelta(points);
+    const deltaClasses =
+      delta > 0
+        ? "text-green-300"
+        : delta < 0
+        ? "text-red-300"
+        : "text-gray-300";
+
+    return (
+      <div className="relative border-t border-gray-700/70 pt-4">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+              ELO
+            </span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={onToggleRangeMenu}
+                aria-expanded={rangeMenuOpen}
+                className="inline-flex items-center gap-1 rounded-full border border-gray-700/80 bg-gray-950/35 px-2 py-0.5 text-xs font-semibold text-gray-300 transition-colors hover:border-gray-600 hover:bg-gray-900 hover:text-white"
+              >
+                {getEloRangeChipLabel(range)}
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform ${
+                    rangeMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {rangeMenuOpen && (
+                <div className="absolute left-0 top-full z-30 mt-2 w-32 overflow-hidden rounded-lg border border-gray-700 bg-gray-950 shadow-xl shadow-black/40">
+                  {ELO_RANGE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => onRangeChange(option.value)}
+                      className={`block w-full px-3 py-2 text-left text-xs font-semibold transition-colors ${
+                        range === option.value
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                      }`}
+                    >
+                      {option.chipLabel}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {loading && (
+              <span className="text-xs font-medium text-gray-500">
+                Updating
+              </span>
+            )}
+          </div>
+          <div className={`text-sm font-bold ${deltaClasses}`}>
+            {formatEloDeltaValue(delta)}
+          </div>
+        </div>
+
+        <div className="rounded-md">
+          <EloHistoryChart
+            points={points}
+            fallbackElo={player.elo}
+            height={104}
+            compact
+            framed={false}
+          />
+        </div>
+      </div>
+    );
+  }
+);
+
+PlayerEloHistoryPanel.displayName = "PlayerEloHistoryPanel";
 
 interface SmashTournamentELOProps {
   defaultTab?: "tiers" | "rankings" | "matchups" | "matches" | "players";
@@ -912,6 +1027,14 @@ export default function SmashTournamentELO({
           searchParams.get(RANKING_QUERY_PLAYER_LIMIT_PARAM)
         )
       : DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT;
+  const initialPlayerStartDateFilter =
+    defaultTab === "players"
+      ? getValidDateQueryValue(searchParams.get("startDate"))
+      : "";
+  const initialPlayerEndDateFilter =
+    defaultTab === "players"
+      ? getValidDateQueryValue(searchParams.get("endDate"))
+      : "";
 
   // State management
   const [players, setPlayers] = useState<ExtendedPlayer[]>([]);
@@ -972,12 +1095,40 @@ export default function SmashTournamentELO({
   const [matchStartDateFilter, setMatchStartDateFilter] =
     useState<string>("");
   const [matchEndDateFilter, setMatchEndDateFilter] = useState<string>("");
+  const [matchOutcomeFilters, setMatchOutcomeFilters] =
+    useState<MatchOutcomeFilterState>(DEFAULT_MATCH_OUTCOME_FILTERS);
+  const [playerStartDateFilter, setPlayerStartDateFilter] = useState<string>(
+    initialPlayerStartDateFilter
+  );
+  const [playerEndDateFilter, setPlayerEndDateFilter] = useState<string>(
+    initialPlayerEndDateFilter
+  );
+  const [eloSparklines, setEloSparklines] = useState<
+    Record<string, EloHistoryPoint[]>
+  >({});
+  const [loadingEloSparklines, setLoadingEloSparklines] =
+    useState<boolean>(false);
+  const [playerEloRanges, setPlayerEloRanges] = useState<
+    Record<string, EloDetailRange>
+  >({});
+  const [openEloRangePlayerId, setOpenEloRangePlayerId] = useState<
+    number | null
+  >(null);
+  const [eloDetailHistories, setEloDetailHistories] = useState<
+    Record<string, EloHistoryPoint[]>
+  >({});
+  const [loadingEloDetailKey, setLoadingEloDetailKey] = useState<string | null>(
+    null
+  );
   const [matchIdSearchInput, setMatchIdSearchInput] = useState<string>("");
   const [matchContextId, setMatchContextId] = useState<number | null>(null);
   const [matchSearchError, setMatchSearchError] = useState<string | null>(null);
   const [autoRefreshDisabled, setAutoRefreshDisabled] =
     useState<boolean>(false);
   const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [showPlayerFilters, setShowPlayerFilters] = useState<boolean>(
+    Boolean(initialPlayerStartDateFilter || initialPlayerEndDateFilter)
+  );
   const [showCharacterBasedFilters, setShowCharacterBasedFilters] =
     useState<boolean>(false);
   const [visibleCharacterRankingsCount, setVisibleCharacterRankingsCount] =
@@ -1067,6 +1218,11 @@ export default function SmashTournamentELO({
         searchParams.get("startDate")
       );
       const endDateParam = getValidDateQueryValue(searchParams.get("endDate"));
+      const resultParam =
+        playerQueryValues.length > 0
+          ? parseMatchResultFilter(searchParams.get("result"))
+          : "all";
+      const stockParam = parseMatchStockFilter(searchParams.get("stock"));
       const matchIdParam = searchParams.get("matchId") || "";
       const hasFilters =
         playerQueryValues.length > 0 ||
@@ -1075,7 +1231,9 @@ export default function SmashTournamentELO({
         only2v2Param ||
         teamRankingParam.length > 0 ||
         startDateParam.length > 0 ||
-        endDateParam.length > 0;
+        endDateParam.length > 0 ||
+        resultParam !== "all" ||
+        stockParam !== "all";
 
       setSelectedPlayerFilter(
         resolvePlayerQueryValuesToIds(playerQueryValues, players)
@@ -1087,10 +1245,32 @@ export default function SmashTournamentELO({
       setTeamRankingFilter(teamRankingParam);
       setMatchStartDateFilter(startDateParam);
       setMatchEndDateFilter(endDateParam);
+      setMatchOutcomeFilters({
+        result: resultParam,
+        stock: stockParam,
+      });
       setMatchIdSearchInput(matchIdParam.replace(/\D/g, ""));
       setShowFilters(hasFilters);
     }
   }, [defaultTab, players, searchParams]);
+
+  useEffect(() => {
+    if (defaultTab !== "players") {
+      return;
+    }
+
+    const startDateParam = getValidDateQueryValue(
+      searchParams.get("startDate")
+    );
+    const endDateParam = getValidDateQueryValue(searchParams.get("endDate"));
+
+    setPlayerStartDateFilter(startDateParam);
+    setPlayerEndDateFilter(endDateParam);
+
+    if (startDateParam || endDateParam) {
+      setShowPlayerFilters(true);
+    }
+  }, [defaultTab, searchParams]);
 
   // Refs to store current filter values for use in intervals
   const currentPlayerFilter = useRef<string[]>([]);
@@ -1101,6 +1281,15 @@ export default function SmashTournamentELO({
   const currentTeamRankingFilter = useRef<string>("");
   const currentMatchStartDateFilter = useRef<string>("");
   const currentMatchEndDateFilter = useRef<string>("");
+  const currentMatchOutcomeFilters = useRef<MatchOutcomeFilterState>(
+    DEFAULT_MATCH_OUTCOME_FILTERS
+  );
+  const currentPlayerStartDateFilter = useRef<string>(
+    initialPlayerStartDateFilter
+  );
+  const currentPlayerEndDateFilter = useRef<string>(
+    initialPlayerEndDateFilter
+  );
   const currentActiveTab = useRef<string>("rankings");
   const currentAutoRefreshDisabled = useRef<boolean>(false);
   const currentLeaderboardTab = useRef<string>("overall");
@@ -1139,6 +1328,27 @@ export default function SmashTournamentELO({
   useEffect(() => {
     currentMatchEndDateFilter.current = matchEndDateFilter;
   }, [matchEndDateFilter]);
+
+  useEffect(() => {
+    currentMatchOutcomeFilters.current = matchOutcomeFilters;
+  }, [matchOutcomeFilters]);
+
+  useEffect(() => {
+    if (selectedPlayerFilter.length === 0 && matchOutcomeFilters.result !== "all") {
+      setMatchOutcomeFilters((currentFilters) => ({
+        ...currentFilters,
+        result: "all",
+      }));
+    }
+  }, [matchOutcomeFilters.result, selectedPlayerFilter.length]);
+
+  useEffect(() => {
+    currentPlayerStartDateFilter.current = playerStartDateFilter;
+  }, [playerStartDateFilter]);
+
+  useEffect(() => {
+    currentPlayerEndDateFilter.current = playerEndDateFilter;
+  }, [playerEndDateFilter]);
 
   useEffect(() => {
     currentActiveTab.current = activeTab;
@@ -1547,10 +1757,17 @@ export default function SmashTournamentELO({
     setError(null);
     setCountdown(30);
     setHardRefreshing(true);
+    setEloSparklines({});
+    setEloDetailHistories({});
 
     try {
       await revalidateCache(["players"]);
-      await fetchPlayers(true, true);
+      await fetchPlayers(
+        true,
+        true,
+        defaultTab === "players" ? playerStartDateFilter : "",
+        defaultTab === "players" ? playerEndDateFilter : ""
+      );
 
       if (
         shouldLoadCharacterRankings(
@@ -1587,6 +1804,13 @@ export default function SmashTournamentELO({
         searchParams.get("startDate")
       );
       const endDateParam = getValidDateQueryValue(searchParams.get("endDate"));
+      const outcomeFilters = {
+        result:
+          players.length > 0
+            ? parseMatchResultFilter(searchParams.get("result"))
+            : "all",
+        stock: parseMatchStockFilter(searchParams.get("stock")),
+      } satisfies MatchOutcomeFilterState;
       const matchIdParam = (searchParams.get("matchId") || "").replace(
         /\D/g,
         ""
@@ -1606,6 +1830,7 @@ export default function SmashTournamentELO({
             teamRankingFilter: teamRankingParam,
             startDateFilter: startDateParam,
             endDateFilter: endDateParam,
+            outcomeFilters,
           }
         );
       } else {
@@ -1621,7 +1846,8 @@ export default function SmashTournamentELO({
           sameTeamParam,
           teamRankingParam,
           startDateParam,
-          endDateParam
+          endDateParam,
+          outcomeFilters
         );
         setMatchesPage(1);
       }
@@ -1702,7 +1928,8 @@ export default function SmashTournamentELO({
     sameTeamFilter: boolean = false,
     teamRankingFilterValue: string = "",
     startDateFilter: string = "",
-    endDateFilter: string = ""
+    endDateFilter: string = "",
+    outcomeFilters: MatchOutcomeFilterState = DEFAULT_MATCH_OUTCOME_FILTERS
   ) => {
     if (defaultTab === "matches") {
       const params = new URLSearchParams();
@@ -1731,6 +1958,12 @@ export default function SmashTournamentELO({
         if (startDateFilter) params.append("startDate", startDateFilter);
         if (endDateFilter) params.append("endDate", endDateFilter);
       }
+      if (outcomeFilters.result !== "all" && playerFilter.length > 0) {
+        params.append("result", outcomeFilters.result);
+      }
+      if (outcomeFilters.stock !== "all") {
+        params.append("stock", outcomeFilters.stock);
+      }
       if (matchIdFilter.trim()) params.append("matchId", matchIdFilter.trim());
       if (showMatchIdSearchParam) params.append("showMatchIdSearch", "true");
 
@@ -1742,10 +1975,81 @@ export default function SmashTournamentELO({
     }
   };
 
+  const updatePlayersURL = (startDateFilter: string, endDateFilter: string) => {
+    if (defaultTab !== "players") {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    const dateFilterError = getDateRangeFilterError(
+      startDateFilter,
+      endDateFilter
+    );
+
+    if (!dateFilterError) {
+      if (startDateFilter) params.append("startDate", startDateFilter);
+      if (endDateFilter) params.append("endDate", endDateFilter);
+    }
+
+    const queryString = params.toString();
+    router.replace(queryString ? `/players?${queryString}` : "/players", {
+      scroll: false,
+    });
+  };
+
+  const applyPlayerDateFilter = (
+    nextStartDateFilter: string,
+    nextEndDateFilter: string
+  ) => {
+    if (
+      getDateRangeFilterError(nextStartDateFilter, nextEndDateFilter) !== null
+    ) {
+      return;
+    }
+
+    updatePlayersURL(nextStartDateFilter, nextEndDateFilter);
+  };
+
+  const handlePlayerStartDateChange = (nextStartDateFilter: string) => {
+    setPlayerStartDateFilter(nextStartDateFilter);
+    applyPlayerDateFilter(nextStartDateFilter, playerEndDateFilter);
+  };
+
+  const handlePlayerEndDateChange = (nextEndDateFilter: string) => {
+    setPlayerEndDateFilter(nextEndDateFilter);
+    applyPlayerDateFilter(playerStartDateFilter, nextEndDateFilter);
+  };
+
+  const clearPlayerDateFilters = () => {
+    setPlayerStartDateFilter("");
+    setPlayerEndDateFilter("");
+    updatePlayersURL("", "");
+  };
+
   // Fetch players from database with caching
   useEffect(() => {
+    const playerStartDateParam =
+      defaultTab === "players"
+        ? getValidDateQueryValue(searchParams.get("startDate"))
+        : "";
+    const playerEndDateParam =
+      defaultTab === "players"
+        ? getValidDateQueryValue(searchParams.get("endDate"))
+        : "";
+    const hasPlayerDateFilter = Boolean(
+      playerStartDateParam || playerEndDateParam
+    );
+    const playerDateFilterError = getDateRangeFilterError(
+      playerStartDateParam,
+      playerEndDateParam
+    );
+
     // Check if we need fresh data
     const checkFreshData = () => {
+      if (hasPlayerDateFilter) {
+        return true;
+      }
+
       // Check memory cache first
       if (
         playersCache &&
@@ -1773,8 +2077,15 @@ export default function SmashTournamentELO({
     };
 
     // Only fetch if we don't have cached data or it's stale
-    if (checkFreshData()) {
-      fetchPlayers();
+    if (playerDateFilterError) {
+      setLoading(false);
+    } else if (checkFreshData()) {
+      fetchPlayers(
+        false,
+        hasPlayerDateFilter,
+        playerStartDateParam,
+        playerEndDateParam
+      );
     } else {
       // Use cached data (from memory or localStorage)
       const cacheToUse =
@@ -1835,6 +2146,13 @@ export default function SmashTournamentELO({
         searchParams.get("startDate")
       );
       const endDateParam = getValidDateQueryValue(searchParams.get("endDate"));
+      const outcomeFilters = {
+        result:
+          players.length > 0
+            ? parseMatchResultFilter(searchParams.get("result"))
+            : "all",
+        stock: parseMatchStockFilter(searchParams.get("stock")),
+      } satisfies MatchOutcomeFilterState;
       const matchIdParam = (searchParams.get("matchId") || "").replace(
         /\D/g,
         ""
@@ -1849,6 +2167,7 @@ export default function SmashTournamentELO({
           teamRankingFilter: teamRankingParam,
           startDateFilter: startDateParam,
           endDateFilter: endDateParam,
+          outcomeFilters,
         });
       } else {
         fetchMatches(
@@ -1863,7 +2182,8 @@ export default function SmashTournamentELO({
           sameTeamParam,
           teamRankingParam,
           startDateParam,
-          endDateParam
+          endDateParam,
+          outcomeFilters
         );
       }
     }
@@ -1878,7 +2198,12 @@ export default function SmashTournamentELO({
           return;
         }
 
-        fetchPlayers(true);
+        fetchPlayers(
+          true,
+          false,
+          currentPlayerStartDateFilter.current,
+          currentPlayerEndDateFilter.current
+        );
         if (
           shouldLoadCharacterRankings(
             defaultTab,
@@ -1909,7 +2234,8 @@ export default function SmashTournamentELO({
             currentSameTeamFilter.current,
             currentTeamRankingFilter.current,
             currentMatchStartDateFilter.current,
-            currentMatchEndDateFilter.current
+            currentMatchEndDateFilter.current,
+            currentMatchOutcomeFilters.current
           );
           setMatchesPage(1);
         }
@@ -1946,8 +2272,21 @@ export default function SmashTournamentELO({
 
   const fetchPlayers = async (
     isBackgroundRefresh = false,
-    bypassBrowserCache = false
+    bypassBrowserCache = false,
+    startDateFilter = "",
+    endDateFilter = ""
   ) => {
+    const hasDateFilter = Boolean(startDateFilter || endDateFilter);
+
+    if (getDateRangeFilterError(startDateFilter, endDateFilter)) {
+      if (!isBackgroundRefresh) {
+        setLoading(false);
+      } else {
+        setRefreshing(false);
+      }
+      return;
+    }
+
     if (!isBackgroundRefresh) {
       setLoading(true);
     } else {
@@ -1956,9 +2295,16 @@ export default function SmashTournamentELO({
     setError(null);
 
     try {
-      const response = await fetch("/api/players", {
-        cache: bypassBrowserCache ? "no-store" : "default",
-      });
+      const params = new URLSearchParams();
+      if (startDateFilter) params.set("startDate", startDateFilter);
+      if (endDateFilter) params.set("endDate", endDateFilter);
+      const queryString = params.toString();
+      const response = await fetch(
+        queryString ? `/api/players?${queryString}` : "/api/players",
+        {
+          cache: bypassBrowserCache || hasDateFilter ? "no-store" : "default",
+        }
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch players");
       }
@@ -1982,6 +2328,7 @@ export default function SmashTournamentELO({
         total_sds?: number;
         current_win_streak?: number;
         last_one_v_one_won?: boolean | null;
+        last_match_date?: string | null;
       }> = await response.json();
 
       // Process players with real stats from database
@@ -1995,18 +2342,20 @@ export default function SmashTournamentELO({
       const now = new Date();
       setLastUpdated(now);
 
-      // Update cache
-      const cacheData = {
-        data: playersWithMatches,
-        timestamp: now.getTime(),
-      };
-      setPlayersCache(cacheData);
+      if (!hasDateFilter) {
+        // Update cache
+        const cacheData = {
+          data: playersWithMatches,
+          timestamp: now.getTime(),
+        };
+        setPlayersCache(cacheData);
 
-      // Also cache in localStorage
-      try {
-        localStorage.setItem("playersCache", JSON.stringify(cacheData));
-      } catch {
-        // If localStorage fails, continue without caching
+        // Also cache in localStorage
+        try {
+          localStorage.setItem("playersCache", JSON.stringify(cacheData));
+        } catch {
+          // If localStorage fails, continue without caching
+        }
       }
 
       // Check for hash after players are loaded
@@ -2033,6 +2382,120 @@ export default function SmashTournamentELO({
       }
     }
   };
+
+  useEffect(() => {
+    if (defaultTab !== "players" || players.length === 0) {
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    const fetchEloSparklines = async () => {
+      setLoadingEloSparklines(true);
+
+      try {
+        const response = await fetch("/api/player-elo-sparklines?range=30d", {
+          cache: "no-store",
+          signal: abortController.signal,
+        });
+        const data = (await response.json()) as {
+          histories?: Record<string, EloHistoryPoint[]>;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to fetch ELO sparklines");
+        }
+
+        setEloSparklines(data.histories || {});
+      } catch (err) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        console.error("Error fetching ELO sparklines:", err);
+        setEloSparklines({});
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoadingEloSparklines(false);
+        }
+      }
+    };
+
+    void fetchEloSparklines();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [defaultTab, players.length, lastUpdated]);
+
+  useEffect(() => {
+    if (defaultTab !== "players") {
+      return;
+    }
+
+    const pendingEntry = Object.entries(playerEloRanges).find(
+      ([playerId, range]) =>
+        range !== "30d" && !eloDetailHistories[`${playerId}:${range}`]
+    );
+
+    if (!pendingEntry) {
+      return;
+    }
+
+    const [playerId, selectedRange] = pendingEntry;
+    const detailKey = `${playerId}:${selectedRange}`;
+    const abortController = new AbortController();
+
+    const fetchPlayerEloHistory = async () => {
+      setLoadingEloDetailKey(detailKey);
+
+      try {
+        const response = await fetch(
+          `/api/players/${playerId}/elo-history?range=${selectedRange}`,
+          {
+            cache: "no-store",
+            signal: abortController.signal,
+          }
+        );
+        const data = (await response.json()) as {
+          points?: EloHistoryPoint[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to fetch player ELO history");
+        }
+
+        setEloDetailHistories((current) => ({
+          ...current,
+          [detailKey]: data.points || [],
+        }));
+      } catch (err) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        console.error("Error fetching player ELO history:", err);
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoadingEloDetailKey((current) =>
+            current === detailKey ? null : current
+          );
+        }
+      }
+    };
+
+    void fetchPlayerEloHistory();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [
+    defaultTab,
+    playerEloRanges,
+    eloDetailHistories,
+  ]);
 
   const fetchCharacterRankings = async (
     isBackgroundRefresh = false,
@@ -2174,7 +2637,12 @@ export default function SmashTournamentELO({
       }
 
       clearPlayersCache();
-      await fetchPlayers(true);
+      await fetchPlayers(
+        true,
+        false,
+        defaultTab === "players" ? playerStartDateFilter : "",
+        defaultTab === "players" ? playerEndDateFilter : ""
+      );
     } catch (err) {
       console.error("Error banning player:", err);
       setError(
@@ -2223,7 +2691,8 @@ export default function SmashTournamentELO({
     sameTeamFilter: boolean = false,
     teamRankingFilterValue: string = "",
     startDateFilter: string = "",
-    endDateFilter: string = ""
+    endDateFilter: string = "",
+    outcomeFilters: MatchOutcomeFilterState = DEFAULT_MATCH_OUTCOME_FILTERS
   ) => {
     playerFilter.forEach((player) => params.append("player", player));
     characterFilter.forEach((character) =>
@@ -2255,6 +2724,14 @@ export default function SmashTournamentELO({
         params.append("endDate", endDateFilter);
       }
     }
+
+    if (outcomeFilters.result !== "all" && playerFilter.length > 0) {
+      params.append("result", outcomeFilters.result);
+    }
+
+    if (outcomeFilters.stock !== "all") {
+      params.append("stock", outcomeFilters.stock);
+    }
   };
 
   const mergeMatchesByDirection = (
@@ -2283,7 +2760,8 @@ export default function SmashTournamentELO({
     sameTeamFilter: boolean = false,
     teamRankingFilterValue: string = "",
     startDateFilter: string = "",
-    endDateFilter: string = ""
+    endDateFilter: string = "",
+    outcomeFilters: MatchOutcomeFilterState = DEFAULT_MATCH_OUTCOME_FILTERS
   ) => {
     if (getMatchDateFilterError(startDateFilter, endDateFilter)) {
       return;
@@ -2307,7 +2785,8 @@ export default function SmashTournamentELO({
         sameTeamFilter,
         teamRankingFilterValue,
         startDateFilter,
-        endDateFilter
+        endDateFilter,
+        outcomeFilters
       );
 
       const url = `/api/matches?${params.toString()}`;
@@ -2368,6 +2847,7 @@ export default function SmashTournamentELO({
       teamRankingFilter?: string;
       startDateFilter?: string;
       endDateFilter?: string;
+      outcomeFilters?: MatchOutcomeFilterState;
     } = {}
   ) => {
     const {
@@ -2378,6 +2858,7 @@ export default function SmashTournamentELO({
       teamRankingFilter = "",
       startDateFilter = "",
       endDateFilter = "",
+      outcomeFilters = DEFAULT_MATCH_OUTCOME_FILTERS,
     } = options;
     const trimmedMatchId = matchId.trim();
 
@@ -2411,7 +2892,8 @@ export default function SmashTournamentELO({
         sameTeamFilter,
         teamRankingFilter,
         startDateFilter,
-        endDateFilter
+        endDateFilter,
+        outcomeFilters
       );
 
       const response = await fetch(`/api/matches?${params.toString()}`, {
@@ -2467,7 +2949,8 @@ export default function SmashTournamentELO({
       sameTeamOnly,
       teamRankingFilter,
       matchStartDateFilter,
-      matchEndDateFilter
+      matchEndDateFilter,
+      matchOutcomeFilters
     );
     setMatchesPage(nextPage);
     setLoadingMoreMatches(false);
@@ -2518,7 +3001,8 @@ export default function SmashTournamentELO({
         sameTeamOnly,
         teamRankingFilter,
         matchStartDateFilter,
-        matchEndDateFilter
+        matchEndDateFilter,
+        matchOutcomeFilters
       );
 
       const response = await fetch(`/api/matches?${params.toString()}`);
@@ -2609,7 +3093,8 @@ export default function SmashTournamentELO({
       sameTeamOnly,
       teamRankingFilter,
       matchStartDateFilter,
-      matchEndDateFilter
+      matchEndDateFilter,
+      matchOutcomeFilters
     );
     await fetchMatchContext(
       trimmedMatchId,
@@ -2622,6 +3107,7 @@ export default function SmashTournamentELO({
         teamRankingFilter,
         startDateFilter: matchStartDateFilter,
         endDateFilter: matchEndDateFilter,
+        outcomeFilters: matchOutcomeFilters,
       }
     );
   };
@@ -2644,7 +3130,8 @@ export default function SmashTournamentELO({
       sameTeamOnly,
       teamRankingFilter,
       matchStartDateFilter,
-      matchEndDateFilter
+      matchEndDateFilter,
+      matchOutcomeFilters
     );
     await fetchMatches(
       1,
@@ -2658,7 +3145,8 @@ export default function SmashTournamentELO({
       sameTeamOnly,
       teamRankingFilter,
       matchStartDateFilter,
-      matchEndDateFilter
+      matchEndDateFilter,
+      matchOutcomeFilters
     );
   };
 
@@ -2673,6 +3161,7 @@ export default function SmashTournamentELO({
       matchId: matchIdSearchInput,
       startDate: matchStartDateFilter,
       endDate: matchEndDateFilter,
+      outcomeFilters: matchOutcomeFilters,
     });
     setMatchesPage(1);
 
@@ -2697,7 +3186,8 @@ export default function SmashTournamentELO({
         sameTeamOnly,
         teamRankingFilter,
         matchStartDateFilter,
-        matchEndDateFilter
+        matchEndDateFilter,
+        matchOutcomeFilters
       );
       await fetchMatchContext(
         trimmedMatchId,
@@ -2710,6 +3200,7 @@ export default function SmashTournamentELO({
           teamRankingFilter,
           startDateFilter: matchStartDateFilter,
           endDateFilter: matchEndDateFilter,
+          outcomeFilters: matchOutcomeFilters,
         }
       );
       return;
@@ -2726,7 +3217,8 @@ export default function SmashTournamentELO({
       sameTeamOnly,
       teamRankingFilter,
       matchStartDateFilter,
-      matchEndDateFilter
+      matchEndDateFilter,
+      matchOutcomeFilters
     );
     await fetchMatches(
       1,
@@ -2740,7 +3232,8 @@ export default function SmashTournamentELO({
       sameTeamOnly,
       teamRankingFilter,
       matchStartDateFilter,
-      matchEndDateFilter
+      matchEndDateFilter,
+      matchOutcomeFilters
     );
   };
 
@@ -2761,6 +3254,9 @@ export default function SmashTournamentELO({
   // Sort players by ELO
   const sortedPlayers = [...players].sort((a, b) => b.elo - a.elo);
   const playersById = new Map(sortedPlayers.map((player) => [player.id, player]));
+  const matchResultPerspectivePlayer = selectedPlayerFilter[0]
+    ? playersById.get(Number(selectedPlayerFilter[0])) || null
+    : null;
   const trimmedMatchIdSearchInput = matchIdSearchInput.trim();
   const isMatchContextActive = matchContextId !== null;
   const matchDateFilterError = getMatchDateFilterError(
@@ -2774,6 +3270,11 @@ export default function SmashTournamentELO({
     matchStartDateFilter,
     matchEndDateFilter
   );
+  const hasMatchResultPerspective = selectedPlayerFilter.length > 0;
+  const activeMatchOutcomeFilterCount = getActiveMatchOutcomeFilterCount({
+    result: hasMatchResultPerspective ? matchOutcomeFilters.result : "all",
+    stock: matchOutcomeFilters.stock,
+  });
   const activeMatchFilterCount = [
     selectedPlayerFilter.length > 0,
     selectedCharacterFilter.length > 0,
@@ -2782,7 +3283,19 @@ export default function SmashTournamentELO({
     sameTeamOnly,
     teamRankingFilter.trim().length > 0,
     hasActiveMatchDateFilter,
-  ].filter(Boolean).length;
+  ].filter(Boolean).length + activeMatchOutcomeFilterCount;
+  const playerDateFilterError = getDateRangeFilterError(
+    playerStartDateFilter,
+    playerEndDateFilter
+  );
+  const hasActivePlayerDateFilter = Boolean(
+    playerStartDateFilter || playerEndDateFilter
+  );
+  const playerDateRangeLabel = getOpenDateRangeLabel(
+    playerStartDateFilter,
+    playerEndDateFilter,
+    "All Dates"
+  );
   const hasActiveMatchSearch =
     trimmedMatchIdSearchInput.length > 0 ||
     isMatchContextActive ||
@@ -5000,6 +5513,12 @@ export default function SmashTournamentELO({
                                       setSelectedPlayerFilter(nextPlayerIds);
                                       setSameTeamOnly(false);
                                       setTeamRankingFilter("");
+                                      if (nextPlayerIds.length === 0) {
+                                        setMatchOutcomeFilters((currentFilters) => ({
+                                          ...currentFilters,
+                                          result: "all",
+                                        }));
+                                      }
                                     }}
                                     placeholder="All players"
                                     label="Players"
@@ -5033,63 +5552,37 @@ export default function SmashTournamentELO({
                               </div>
 
                               <div className="mt-5 border-t border-gray-700/70 pt-5">
-                                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                                  <div className="flex flex-wrap items-center gap-3">
-                                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                                      Date
-                                    </span>
-                                    <div className="rounded-full border border-gray-600 bg-gray-800/90 px-3 py-1.5 text-xs font-medium text-gray-200">
-                                      {matchDateRangeLabel}
-                                    </div>
-                                  </div>
+                                <DateRangeFilterBar
+                                  rangeLabel={matchDateRangeLabel}
+                                  startDate={matchStartDateFilter}
+                                  endDate={matchEndDateFilter}
+                                  onStartDateChange={setMatchStartDateFilter}
+                                  onEndDateChange={setMatchEndDateFilter}
+                                  error={matchDateFilterError}
+                                  showClear={hasActiveMatchDateFilter}
+                                  onClear={() => {
+                                    setMatchStartDateFilter("");
+                                    setMatchEndDateFilter("");
+                                  }}
+                                  className="border-gray-700 bg-gray-800/40 shadow-none"
+                                />
+                              </div>
 
-                                  <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-center xl:justify-end">
-                                    <label className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-800/75 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 transition-colors focus-within:border-blue-500/70">
-                                      <span className="w-10">Start</span>
-                                      <input
-                                        type="date"
-                                        value={matchStartDateFilter}
-                                        onChange={(event) =>
-                                          setMatchStartDateFilter(
-                                            event.target.value
-                                          )
-                                        }
-                                        className="h-9 min-w-0 flex-1 rounded-lg border border-gray-600 bg-gray-950/70 px-3 text-sm font-medium normal-case tracking-normal text-white outline-none [color-scheme:dark] sm:w-40"
-                                      />
-                                    </label>
-                                    <label className="flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-800/75 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 transition-colors focus-within:border-blue-500/70">
-                                      <span className="w-10">End</span>
-                                      <input
-                                        type="date"
-                                        value={matchEndDateFilter}
-                                        onChange={(event) =>
-                                          setMatchEndDateFilter(
-                                            event.target.value
-                                          )
-                                        }
-                                        className="h-9 min-w-0 flex-1 rounded-lg border border-gray-600 bg-gray-950/70 px-3 text-sm font-medium normal-case tracking-normal text-white outline-none [color-scheme:dark] sm:w-40"
-                                      />
-                                    </label>
-                                    {hasActiveMatchDateFilter && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setMatchStartDateFilter("");
-                                          setMatchEndDateFilter("");
-                                        }}
-                                        className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-600 bg-gray-800/75 px-4 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-700 hover:text-white"
-                                      >
-                                        Clear Dates
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {matchDateFilterError && (
-                                  <div className="mt-2 text-sm font-medium text-red-400">
-                                    {matchDateFilterError}
-                                  </div>
-                                )}
+                              <div className="mt-5 border-t border-gray-700/70 pt-5">
+                                <MatchOutcomeFilters
+                                  value={matchOutcomeFilters}
+                                  onChange={setMatchOutcomeFilters}
+                                  resultLabel={
+                                    matchResultPerspectivePlayer
+                                      ? `${getPlayerQueryLabel(
+                                          matchResultPerspectivePlayer
+                                        )} result`
+                                      : "Selected player result"
+                                  }
+                                  resultDisabled={!hasMatchResultPerspective}
+                                  resultDisabledMessage="Select a player to filter wins or losses."
+                                  compact
+                                />
                               </div>
 
                               {/* Additional Filters */}
@@ -5174,6 +5667,9 @@ export default function SmashTournamentELO({
                                     setTeamRankingFilter("");
                                     setMatchStartDateFilter("");
                                     setMatchEndDateFilter("");
+                                    setMatchOutcomeFilters(
+                                      DEFAULT_MATCH_OUTCOME_FILTERS
+                                    );
                                     setMatchIdSearchInput("");
                                     setMatchContextId(null);
                                     setMatchSearchError(null);
@@ -5288,6 +5784,9 @@ export default function SmashTournamentELO({
                                                 setOnly2v2(is2v2);
                                                 setSameTeamOnly(false);
                                                 setTeamRankingFilter("");
+                                                setMatchOutcomeFilters(
+                                                  DEFAULT_MATCH_OUTCOME_FILTERS
+                                                );
                                                 setMatchIdSearchInput(nextMatchId);
                                                 setShowFilters(true);
                                                 setTimeout(async () => {
@@ -5302,7 +5801,8 @@ export default function SmashTournamentELO({
                                                       false,
                                                       "",
                                                       matchStartDateFilter,
-                                                      matchEndDateFilter
+                                                      matchEndDateFilter,
+                                                      DEFAULT_MATCH_OUTCOME_FILTERS
                                                     );
                                                     await fetchMatchContext(
                                                       nextMatchId,
@@ -5315,6 +5815,8 @@ export default function SmashTournamentELO({
                                                           matchStartDateFilter,
                                                         endDateFilter:
                                                           matchEndDateFilter,
+                                                        outcomeFilters:
+                                                          DEFAULT_MATCH_OUTCOME_FILTERS,
                                                       }
                                                     );
                                                     return;
@@ -5329,7 +5831,8 @@ export default function SmashTournamentELO({
                                                     false,
                                                     "",
                                                     matchStartDateFilter,
-                                                    matchEndDateFilter
+                                                    matchEndDateFilter,
+                                                    DEFAULT_MATCH_OUTCOME_FILTERS
                                                   );
                                                   await fetchMatches(
                                                     1,
@@ -5343,7 +5846,8 @@ export default function SmashTournamentELO({
                                                     false,
                                                     "",
                                                     matchStartDateFilter,
-                                                    matchEndDateFilter
+                                                    matchEndDateFilter,
+                                                    DEFAULT_MATCH_OUTCOME_FILTERS
                                                   );
                                                 }, 100);
                                               }}
@@ -5489,6 +5993,20 @@ export default function SmashTournamentELO({
                                 Fighter Profiles
                               </h2>
                             </div>
+                            <button
+                              onClick={() =>
+                                setShowPlayerFilters((current) => !current)
+                              }
+                              className={`p-2 rounded-lg transition-colors duration-200 ${
+                                showPlayerFilters || hasActivePlayerDateFilter
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
+                              }`}
+                              title="Toggle Player Filters"
+                              aria-label="Toggle player date filters"
+                            >
+                              <Filter size={20} />
+                            </button>
                           </div>
                           <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                             <RefreshStatus
@@ -5510,13 +6028,30 @@ export default function SmashTournamentELO({
                           isRefreshing ? "opacity-75" : "opacity-100"
                         }`}
                       >
+                        {showPlayerFilters && (
+                          <div className="mb-6">
+                            <DateRangeFilterBar
+                              rangeLabel={playerDateRangeLabel}
+                              startDate={playerStartDateFilter}
+                              endDate={playerEndDateFilter}
+                              onStartDateChange={handlePlayerStartDateChange}
+                              onEndDateChange={handlePlayerEndDateChange}
+                              error={playerDateFilterError}
+                              showClear={hasActivePlayerDateFilter}
+                              onClear={clearPlayerDateFilters}
+                              loading={refreshing}
+                              className="border-gray-700 bg-gray-800/40 shadow-none"
+                            />
+                          </div>
+                        )}
+
                         {/* Ranked Players Section */}
                         {playersTabRankedPlayers.length > 0 && (
                           <div className="mb-8">
                             <h3 className="text-xl font-bold text-white mb-4 px-2">
                               Ranked Players ({playersTabRankedPlayers.length})
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                               {playersTabRankedPlayers.map((player, index) => {
                                 const winRate =
                                   player.total_wins &&
@@ -5530,12 +6065,26 @@ export default function SmashTournamentELO({
                                         100
                                       ).toFixed(1)
                                     : "0.0";
+                                const selectedEloRange =
+                                  playerEloRanges[String(player.id)] || "30d";
+                                const playerEloDetailKey = `${player.id}:${selectedEloRange}`;
+                                const playerEloPoints =
+                                  selectedEloRange === "30d"
+                                    ? eloSparklines[String(player.id)] || []
+                                    : eloDetailHistories[
+                                        playerEloDetailKey
+                                      ] || [];
+                                const playerEloLoading =
+                                  selectedEloRange === "30d"
+                                    ? loadingEloSparklines
+                                    : loadingEloDetailKey ===
+                                      playerEloDetailKey;
 
                                 return (
                                   <div
                                     key={player.id}
                                     id={`player-${player.id}`}
-                                    className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 border border-gray-700 hover:border-gray-600 transition-all duration-300 hover:transform hover:scale-105 shadow-lg relative overflow-hidden"
+                                    className="relative rounded-xl border border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900 p-5 shadow-lg transition-colors duration-200 hover:border-gray-600"
                                   >
                                     {/* Rank badge */}
                                     <div className="absolute top-4 right-4">
@@ -5736,6 +6285,39 @@ export default function SmashTournamentELO({
                                       </div>
                                     </div>
 
+                                    <div className="mt-4">
+                                      <PlayerEloHistoryPanel
+                                        player={player}
+                                        range={selectedEloRange}
+                                        points={playerEloPoints}
+                                        loading={playerEloLoading}
+                                        rangeMenuOpen={
+                                          openEloRangePlayerId === player.id
+                                        }
+                                        onToggleRangeMenu={() => {
+                                          setOpenEloRangePlayerId((current) =>
+                                            current === player.id
+                                              ? null
+                                              : player.id
+                                          );
+                                        }}
+                                        onRangeChange={(range) => {
+                                          setPlayerEloRanges((current) => {
+                                            const next = { ...current };
+
+                                            if (range === "30d") {
+                                              delete next[String(player.id)];
+                                            } else {
+                                              next[String(player.id)] = range;
+                                            }
+
+                                            return next;
+                                          });
+                                          setOpenEloRangePlayerId(null);
+                                        }}
+                                      />
+                                    </div>
+
                                     {/* Card Actions */}
                                     <div className="mt-4 space-y-2 border-t border-gray-600 pt-4">
                                       <button
@@ -5786,7 +6368,7 @@ export default function SmashTournamentELO({
                             <h3 className="text-xl font-bold text-white mb-4 px-2">
                               Unranked Players ({sortedUnrankedPlayers.length})
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                               {sortedUnrankedPlayers.map((player) => {
                                 const winRate =
                                   player.total_wins &&
@@ -5800,12 +6382,26 @@ export default function SmashTournamentELO({
                                         100
                                       ).toFixed(1)
                                     : "0.0";
+                                const selectedEloRange =
+                                  playerEloRanges[String(player.id)] || "30d";
+                                const playerEloDetailKey = `${player.id}:${selectedEloRange}`;
+                                const playerEloPoints =
+                                  selectedEloRange === "30d"
+                                    ? eloSparklines[String(player.id)] || []
+                                    : eloDetailHistories[
+                                        playerEloDetailKey
+                                      ] || [];
+                                const playerEloLoading =
+                                  selectedEloRange === "30d"
+                                    ? loadingEloSparklines
+                                    : loadingEloDetailKey ===
+                                      playerEloDetailKey;
 
                                 return (
                                   <div
                                     key={player.id}
                                     id={`player-${player.id}`}
-                                    className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 border border-gray-700 hover:border-gray-600 transition-all duration-300 hover:transform hover:scale-105 shadow-lg relative overflow-hidden"
+                                    className="relative rounded-xl border border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900 p-5 shadow-lg transition-colors duration-200 hover:border-gray-600"
                                   >
                                     {/* No rank badge for unranked players */}
                                     {player.inactive && (
@@ -5978,6 +6574,39 @@ export default function SmashTournamentELO({
                                           </div>
                                         </div>
                                       </div>
+                                    </div>
+
+                                    <div className="mt-4">
+                                      <PlayerEloHistoryPanel
+                                        player={player}
+                                        range={selectedEloRange}
+                                        points={playerEloPoints}
+                                        loading={playerEloLoading}
+                                        rangeMenuOpen={
+                                          openEloRangePlayerId === player.id
+                                        }
+                                        onToggleRangeMenu={() => {
+                                          setOpenEloRangePlayerId((current) =>
+                                            current === player.id
+                                              ? null
+                                              : player.id
+                                          );
+                                        }}
+                                        onRangeChange={(range) => {
+                                          setPlayerEloRanges((current) => {
+                                            const next = { ...current };
+
+                                            if (range === "30d") {
+                                              delete next[String(player.id)];
+                                            } else {
+                                              next[String(player.id)] = range;
+                                            }
+
+                                            return next;
+                                          });
+                                          setOpenEloRangePlayerId(null);
+                                        }}
+                                      />
                                     </div>
 
                                     {/* Card Actions */}

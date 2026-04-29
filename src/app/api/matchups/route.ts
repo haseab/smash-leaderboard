@@ -1,5 +1,9 @@
 import { resolvePlayerPairByQueryValues } from "@/lib/server/playerQueryResolver";
 import { prisma } from "@/lib/prisma";
+import {
+  parseMatchResultFilter,
+  parseMatchStockFilter,
+} from "@/lib/matchOutcomeFilters";
 import { normalizeAppUrl } from "@/lib/site-url";
 import {
   expandCharacterAliasQueryValues,
@@ -15,6 +19,8 @@ interface MatchupStats {
   totalFalls: number;
   totalSds: number;
   longestWinStreak: number;
+  threeStocks: number;
+  twoStocks: number;
 }
 
 interface MatchupRecentMatch {
@@ -41,6 +47,7 @@ interface MatchupSummaryRow {
   player2_available_characters: string[];
   player1_stats: MatchupStats;
   player2_stats: MatchupStats;
+  recent_matches_count: number;
   recent_matches: MatchupRecentMatch[];
 }
 
@@ -302,6 +309,12 @@ export async function GET(request: Request) {
     const timeRange = parseTimeRange(searchParams.get("timeRange"));
     const startDateInput = searchParams.get("startDate");
     const endDateInput = searchParams.get("endDate");
+    const recentResultFilter = parseMatchResultFilter(
+      searchParams.get("recentResult")
+    );
+    const recentStockFilter = parseMatchStockFilter(
+      searchParams.get("recentStock")
+    );
 
     if (!playerOneId || !playerTwoId) {
       return NextResponse.json(
@@ -389,6 +402,31 @@ export async function GET(request: Request) {
     const playerTwoExcludedCharactersFilter =
       playerTwoExcludedCharacterAliases.length > 0
         ? Prisma.sql`AND h.player_two_character NOT IN (${Prisma.join(playerTwoExcludedCharacterAliases)})`
+        : Prisma.empty;
+    const recentResultFilterSql =
+      recentResultFilter === "wins"
+        ? Prisma.sql`AND h.player_one_has_won = true`
+        : recentResultFilter === "losses"
+          ? Prisma.sql`AND h.player_one_has_won = false`
+          : Prisma.empty;
+    const recentStockFilterSql =
+      recentStockFilter !== "all"
+        ? Prisma.sql`
+            AND (
+              CASE
+                WHEN h.player_one_has_won
+                  THEN 3 - (h.player_one_falls + h.player_one_sds)
+                ELSE 3 - (h.player_two_falls + h.player_two_sds)
+              END
+            ) = ${Number(recentStockFilter)}
+            AND (
+              CASE
+                WHEN h.player_one_has_won
+                  THEN h.player_two_falls + h.player_two_sds
+                ELSE h.player_one_falls + h.player_one_sds
+              END
+            ) >= 3
+          `
         : Prisma.empty;
 
     const [summaryRow] = await prisma.$queryRaw<MatchupSummaryRow[]>(Prisma.sql`
@@ -517,7 +555,19 @@ export async function GET(request: Request) {
             'totalSds',
             COALESCE(SUM(player_one_sds), 0)::int,
             'longestWinStreak',
-            COALESCE((SELECT MAX(streak_length) FROM player_one_win_streaks), 0)::int
+            COALESCE((SELECT MAX(streak_length) FROM player_one_win_streaks), 0)::int,
+            'threeStocks',
+            COUNT(*) FILTER (
+              WHERE player_one_has_won
+                AND player_one_falls + player_one_sds = 0
+                AND player_two_falls + player_two_sds >= 3
+            )::int,
+            'twoStocks',
+            COUNT(*) FILTER (
+              WHERE player_one_has_won
+                AND player_one_falls + player_one_sds = 1
+                AND player_two_falls + player_two_sds >= 3
+            )::int
           ) AS player1_stats,
           json_build_object(
             'wins',
@@ -531,9 +581,32 @@ export async function GET(request: Request) {
             'totalSds',
             COALESCE(SUM(player_two_sds), 0)::int,
             'longestWinStreak',
-            COALESCE((SELECT MAX(streak_length) FROM player_two_win_streaks), 0)::int
+            COALESCE((SELECT MAX(streak_length) FROM player_two_win_streaks), 0)::int,
+            'threeStocks',
+            COUNT(*) FILTER (
+              WHERE player_two_has_won
+                AND player_two_falls + player_two_sds = 0
+                AND player_one_falls + player_one_sds >= 3
+            )::int,
+            'twoStocks',
+            COUNT(*) FILTER (
+              WHERE player_two_has_won
+                AND player_two_falls + player_two_sds = 1
+                AND player_one_falls + player_one_sds >= 3
+            )::int
           ) AS player2_stats
         FROM filtered_matches
+      ),
+      recent_filtered_matches AS (
+        SELECT *
+        FROM filtered_matches h
+        WHERE 1 = 1
+          ${recentResultFilterSql}
+          ${recentStockFilterSql}
+      ),
+      recent_match_count AS (
+        SELECT COUNT(*)::int AS recent_matches_count
+        FROM recent_filtered_matches
       ),
       recent_matches AS (
         SELECT
@@ -575,7 +648,7 @@ export async function GET(request: Request) {
           ) AS recent_matches
         FROM (
           SELECT *
-          FROM filtered_matches
+          FROM recent_filtered_matches
           ORDER BY created_at DESC, match_id DESC
           LIMIT ${recentLimit}
         ) recent
@@ -587,9 +660,11 @@ export async function GET(request: Request) {
         ac.player2_available_characters,
         s.player1_stats,
         s.player2_stats,
+        rmc.recent_matches_count,
         rm.recent_matches
       FROM available_characters ac
       CROSS JOIN summary s
+      CROSS JOIN recent_match_count rmc
       CROSS JOIN recent_matches rm
     `);
 
@@ -605,6 +680,8 @@ export async function GET(request: Request) {
         totalFalls: 0,
         totalSds: 0,
         longestWinStreak: 0,
+        threeStocks: 0,
+        twoStocks: 0,
       },
       player2_stats: {
         wins: 0,
@@ -613,7 +690,10 @@ export async function GET(request: Request) {
         totalFalls: 0,
         totalSds: 0,
         longestWinStreak: 0,
+        threeStocks: 0,
+        twoStocks: 0,
       },
+      recent_matches_count: 0,
       recent_matches: [],
     };
 
@@ -626,6 +706,7 @@ export async function GET(request: Request) {
       },
       player1: result.player1_stats,
       player2: result.player2_stats,
+      recentMatchesCount: result.recent_matches_count,
       recentMatches: result.recent_matches.map((match) => ({
         ...match,
         player1Character: getCanonicalCharacterName(match.player1Character),

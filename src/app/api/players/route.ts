@@ -1,3 +1,4 @@
+import { addUtcDays, parseUtcDate } from "@/lib/dateRange";
 import { prisma } from "@/lib/prisma";
 import { normalizeAppUrl } from "@/lib/site-url";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
@@ -50,7 +51,28 @@ interface TransformedPlayer {
   last_match_date: string | null;
 }
 
-async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
+async function fetchPlayersFromDb(
+  startDate: Date | null = null,
+  endDate: Date | null = null
+): Promise<TransformedPlayer[]> {
+  const queryParams: Date[] = [];
+  const oneVOneMatchDateFilters: string[] = [];
+
+  if (startDate) {
+    queryParams.push(startDate);
+    oneVOneMatchDateFilters.push(
+      `      AND vm.created_at >= $${queryParams.length}`
+    );
+  }
+
+  if (endDate) {
+    queryParams.push(addUtcDays(endDate, 1));
+    oneVOneMatchDateFilters.push(
+      `      AND vm.created_at < $${queryParams.length}`
+    );
+  }
+
+  const oneVOneMatchDateFilter = oneVOneMatchDateFilters.join("\n");
   const query = `
   WITH
   -- Matches that are visible in the app (exclude archived and any match with a banned human player)
@@ -76,6 +98,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     FROM visible_matches vm
     JOIN match_participants mp ON vm.id = mp.match_id
     WHERE mp.is_cpu = false
+${oneVOneMatchDateFilter}
     GROUP BY vm.id
     HAVING COUNT(*) = 2
   ),
@@ -193,7 +216,10 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
   ORDER BY p.elo DESC;
   `;
 
-  const result = (await prisma.$queryRawUnsafe(query)) as PlayerQueryResult[];
+  const result = (await prisma.$queryRawUnsafe(
+    query,
+    ...queryParams
+  )) as PlayerQueryResult[];
 
   // Transform BigInt values to numbers for JSON serialization
   const transformedPlayers = result.map((player) => ({
@@ -236,11 +262,39 @@ const getCachedPlayers = unstable_cache(
   }
 );
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    console.log("[GET /api/players] Fetching players (cached)...");
+    const { searchParams } = new URL(request.url);
+    const startDateInput = searchParams.get("startDate");
+    const endDateInput = searchParams.get("endDate");
+    const startDate = parseUtcDate(startDateInput);
+    const endDate = parseUtcDate(endDateInput);
 
-    const players = await getCachedPlayers();
+    if ((startDateInput && !startDate) || (endDateInput && !endDate)) {
+      return NextResponse.json(
+        { error: "Invalid date filter" },
+        { status: 400 }
+      );
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      return NextResponse.json(
+        { error: "Start date must be on or before the end date" },
+        { status: 400 }
+      );
+    }
+
+    const hasDateFilter = Boolean(startDate || endDate);
+
+    console.log(
+      hasDateFilter
+        ? "[GET /api/players] Fetching players with date filter..."
+        : "[GET /api/players] Fetching players (cached)..."
+    );
+
+    const players = hasDateFilter
+      ? await fetchPlayersFromDb(startDate, endDate)
+      : await getCachedPlayers();
 
     console.log(
       "[GET /api/players] Returning",
