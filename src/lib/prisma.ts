@@ -18,6 +18,7 @@ export interface Player {
   top_ten_played: number;
   banned?: boolean;
   inactive: boolean;
+  solo_team: boolean;
   country?: string | null;
   picture?: string | null;
   main_character?: string | null;
@@ -27,6 +28,7 @@ export interface Player {
   total_falls?: number;
   total_sds?: number;
   current_win_streak?: number;
+  last_one_v_one_won?: boolean | null;
 }
 
 export interface PlayerStats {

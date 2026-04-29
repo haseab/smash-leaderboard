@@ -13,6 +13,7 @@ interface MatchupStats {
   totalKos: number;
   totalFalls: number;
   totalSds: number;
+  longestWinStreak: number;
 }
 
 interface MatchupRecentMatch {
@@ -43,11 +44,6 @@ interface MatchupSummaryRow {
 }
 
 type MatchupTimeRange = "all" | "7d" | "30d" | "1y" | "custom";
-
-const parseStringArray = (values: string[]) =>
-  Array.from(
-    new Set(values.map((value) => value.trim()).filter(Boolean))
-  );
 
 const parseCanonicalCharacterArray = (values: string[]) =>
   Array.from(
@@ -317,6 +313,32 @@ export async function GET(request: Request) {
           ${playerOneExcludedCharactersFilter}
           ${playerTwoExcludedCharactersFilter}
       ),
+      player_one_streak_groups AS (
+        SELECT
+          player_one_has_won,
+          SUM(CASE WHEN NOT player_one_has_won THEN 1 ELSE 0 END)
+            OVER (ORDER BY created_at ASC, match_id ASC) AS streak_group
+        FROM filtered_matches
+      ),
+      player_one_win_streaks AS (
+        SELECT COUNT(*)::int AS streak_length
+        FROM player_one_streak_groups
+        WHERE player_one_has_won
+        GROUP BY streak_group
+      ),
+      player_two_streak_groups AS (
+        SELECT
+          player_two_has_won,
+          SUM(CASE WHEN NOT player_two_has_won THEN 1 ELSE 0 END)
+            OVER (ORDER BY created_at ASC, match_id ASC) AS streak_group
+        FROM filtered_matches
+      ),
+      player_two_win_streaks AS (
+        SELECT COUNT(*)::int AS streak_length
+        FROM player_two_streak_groups
+        WHERE player_two_has_won
+        GROUP BY streak_group
+      ),
       summary AS (
         SELECT
           COUNT(*)::int AS total_matches,
@@ -330,7 +352,9 @@ export async function GET(request: Request) {
             'totalFalls',
             COALESCE(SUM(player_one_falls), 0)::int,
             'totalSds',
-            COALESCE(SUM(player_one_sds), 0)::int
+            COALESCE(SUM(player_one_sds), 0)::int,
+            'longestWinStreak',
+            COALESCE((SELECT MAX(streak_length) FROM player_one_win_streaks), 0)::int
           ) AS player1_stats,
           json_build_object(
             'wins',
@@ -342,7 +366,9 @@ export async function GET(request: Request) {
             'totalFalls',
             COALESCE(SUM(player_two_falls), 0)::int,
             'totalSds',
-            COALESCE(SUM(player_two_sds), 0)::int
+            COALESCE(SUM(player_two_sds), 0)::int,
+            'longestWinStreak',
+            COALESCE((SELECT MAX(streak_length) FROM player_two_win_streaks), 0)::int
           ) AS player2_stats
         FROM filtered_matches
       ),
@@ -415,6 +441,7 @@ export async function GET(request: Request) {
         totalKos: 0,
         totalFalls: 0,
         totalSds: 0,
+        longestWinStreak: 0,
       },
       player2_stats: {
         wins: 0,
@@ -422,6 +449,7 @@ export async function GET(request: Request) {
         totalKos: 0,
         totalFalls: 0,
         totalSds: 0,
+        longestWinStreak: 0,
       },
       recent_matches: [],
     };

@@ -20,6 +20,7 @@ model players {
   picture               String?
   banned                Boolean  @default(false)
   inactive              Boolean  @default(false)
+  solo_team             Boolean  @default(false)
   top_ten_played        Int      @default(0)
   
   // Relations
@@ -95,6 +96,8 @@ model team_rankings {
   created_at         DateTime  @default(now())
   player_one         BigInt
   player_two         BigInt
+  team_name          String?
+  logo               String?
   elo                BigInt    @default(1200)
   total_wins         Int       @default(0)
   total_losses       Int       @default(0)

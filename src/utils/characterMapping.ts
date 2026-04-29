@@ -119,6 +119,7 @@ const specialMappings: Record<string, string> = {
 };
 
 const canonicalDisplayMappings: Record<string, string> = {
+  STEVE: "Steve",
   "KING K. ROOL": "King K. Rool",
   "ROSALINA & LUMA": "Rosalina & Luma",
   "PYRA/MYTHRA": "Pyra/Mythra",

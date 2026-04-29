@@ -1,6 +1,5 @@
 "use client";
 
-import CharacterDropdown from "@/components/CharacterDropdown";
 import CharacterProfilePicture from "@/components/CharacterProfilePicture";
 import MatchCard, { MatchCardMatch } from "@/components/MatchCard";
 import PlayerDropdown from "@/components/PlayerDropdown";
@@ -10,10 +9,10 @@ import {
   serializePlayerIdToQueryValue,
 } from "@/lib/playerQuery";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
-import { X } from "lucide-react";
+import { Ban, Check, ChevronDown, Search, X } from "lucide-react";
 import ReactCountryFlag from "react-country-flag";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface MatchupExplorerPlayer {
   id: number;
@@ -30,6 +29,7 @@ interface MatchupParticipantStats {
   totalKos: number;
   totalFalls: number;
   totalSds: number;
+  longestWinStreak: number;
 }
 
 type MatchupTimeRange = "all" | "7d" | "30d" | "1y" | "custom";
@@ -212,6 +212,14 @@ const getCharacterOptions = (options: string[], selectedValues: string[]) =>
     )
   );
 
+const timeRangeOptions: Array<{ value: MatchupTimeRange; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "7d", label: "7D" },
+  { value: "30d", label: "30D" },
+  { value: "1y", label: "1Y" },
+  { value: "custom", label: "Custom" },
+];
+
 function PlayerAvatar({
   player,
   size = "lg",
@@ -243,36 +251,311 @@ function PlayerAvatar({
   );
 }
 
+function CharacterFilterControl({
+  label,
+  selectedCharacter,
+  availableCharacters,
+  excludedCharacters,
+  disabled,
+  align = "left",
+  onCharacterChange,
+  onAddExcludedCharacter,
+  onRemoveExcludedCharacter,
+  onClearFilters,
+}: {
+  label: string;
+  selectedCharacter: string;
+  availableCharacters: string[];
+  excludedCharacters: string[];
+  disabled: boolean;
+  align?: "left" | "right";
+  onCharacterChange: (character: string) => void;
+  onAddExcludedCharacter: (character: string) => void;
+  onRemoveExcludedCharacter: (character: string) => void;
+  onClearFilters: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const hasActiveFilters = Boolean(
+    selectedCharacter || excludedCharacters.length > 0
+  );
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredCharacters = availableCharacters.filter((character) =>
+    normalizedQuery ? character.toLowerCase().includes(normalizedQuery) : true
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (disabled) {
+      setIsOpen(false);
+    }
+  }, [disabled]);
+
+  const clearAllFilters = () => {
+    onClearFilters();
+    setQuery("");
+    setIsOpen(false);
+  };
+
+  const selectCharacter = (character: string) => {
+    onCharacterChange(character);
+    setQuery("");
+    setIsOpen(false);
+  };
+
+  const toggleExcludedCharacter = (character: string) => {
+    if (character === selectedCharacter) {
+      return;
+    }
+
+    if (excludedCharacters.includes(character)) {
+      onRemoveExcludedCharacter(character);
+      return;
+    }
+
+    onAddExcludedCharacter(character);
+  };
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen((current) => !current)}
+        disabled={disabled}
+        aria-expanded={isOpen}
+        aria-label={label}
+        className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors ${
+          selectedCharacter
+            ? "border-blue-500/40 bg-blue-600/20 text-blue-50 hover:bg-blue-600/30"
+            : "border-gray-600 bg-gray-900/60 text-gray-200 hover:bg-gray-700"
+        } disabled:cursor-not-allowed disabled:opacity-50`}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {selectedCharacter && (
+            <CharacterProfilePicture
+              characterName={selectedCharacter}
+              size="sm"
+              className="h-6 w-6 border-gray-400"
+              alt={selectedCharacter}
+            />
+          )}
+          <span className="truncate">
+            {selectedCharacter || "Any character"}
+          </span>
+          {excludedCharacters.length > 0 && (
+            <span className="rounded-full border border-orange-500/30 bg-orange-500/15 px-1.5 text-[0.7rem] font-semibold text-orange-100">
+              -{excludedCharacters.length}
+            </span>
+          )}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute top-[calc(100%+0.5rem)] z-[190] w-80 max-w-[calc(100vw-3rem)] overflow-hidden rounded-2xl border border-gray-700 bg-gray-900 shadow-2xl ${
+            align === "right" ? "right-0" : "left-0"
+          }`}
+        >
+          <div className="border-b border-gray-700 p-3">
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                size={16}
+              />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search characters"
+                autoFocus
+                className="w-full rounded-xl border border-gray-600 bg-gray-950 py-2.5 pl-10 pr-3 text-sm text-white outline-none transition-colors focus:border-blue-500"
+              />
+            </div>
+
+            {hasActiveFilters && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-gray-300 transition-colors hover:text-white"
+                >
+                  <X size={12} />
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="max-h-80 overflow-y-auto p-2">
+            <button
+              type="button"
+              onClick={() => selectCharacter("")}
+              className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                selectedCharacter === ""
+                  ? "bg-blue-600/20 text-white"
+                  : "text-gray-200 hover:bg-gray-800"
+              }`}
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-gray-800 text-xs font-semibold text-gray-300">
+                All
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold">
+                  Any character
+                </div>
+              </div>
+              {selectedCharacter === "" && (
+                <Check className="h-4 w-4 text-blue-300" />
+              )}
+            </button>
+
+            {filteredCharacters.length === 0 ? (
+              <div className="px-3 py-8 text-center text-sm text-gray-400">
+                No characters found.
+              </div>
+            ) : (
+              filteredCharacters.map((character) => {
+                const isSelected = selectedCharacter === character;
+                const isExcluded = excludedCharacters.includes(character);
+
+                return (
+                  <div
+                    key={character}
+                    className={`flex items-center gap-1 rounded-xl transition-colors ${
+                      isSelected
+                        ? "bg-blue-600/20 text-white"
+                        : isExcluded
+                        ? "bg-orange-500/10 text-orange-50"
+                        : "text-gray-200 hover:bg-gray-800"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => selectCharacter(character)}
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-l-xl px-3 py-2.5 text-left"
+                    >
+                      <CharacterProfilePicture
+                        characterName={character}
+                        size="sm"
+                        className="h-9 w-9 border-gray-500"
+                        alt={character}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">
+                          {character}
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <Check className="h-4 w-4 flex-shrink-0 text-blue-300" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleExcludedCharacter(character)}
+                      disabled={isSelected}
+                      aria-label={
+                        isExcluded
+                          ? `Include ${character}`
+                          : `Exclude ${character}`
+                      }
+                      title={
+                        isExcluded
+                          ? `Include ${character}`
+                          : `Exclude ${character}`
+                      }
+                      className={`mr-2 inline-flex h-8 items-center gap-1 rounded-full border px-2 text-xs font-semibold transition-colors ${
+                        isExcluded
+                          ? "border-orange-400/40 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+                          : "border-gray-600 bg-gray-950/60 text-gray-300 hover:border-orange-400/40 hover:text-orange-100"
+                      } disabled:cursor-not-allowed disabled:opacity-40`}
+                    >
+                      {isExcluded ? (
+                        <X className="h-3.5 w-3.5" />
+                      ) : (
+                        <Ban className="h-3.5 w-3.5" />
+                      )}
+                      <span>{isExcluded ? "Include" : "Exclude"}</span>
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlayerSummaryCard({
   player,
   stats,
   selectedCharacter,
+  availableCharacters,
   excludedCharacters,
-  accentClasses,
   onPlayerClick,
   onViewTopCharacters,
+  onCharacterChange,
+  onAddExcludedCharacter,
+  onRemoveExcludedCharacter,
+  onClearCharacterFilters,
   disabled,
+  characterMenuAlign = "left",
 }: {
   player: MatchupExplorerPlayer;
   stats: MatchupParticipantStats;
   selectedCharacter: string;
+  availableCharacters: string[];
   excludedCharacters: string[];
-  accentClasses: string;
   onPlayerClick: (playerId: number) => void;
   onViewTopCharacters: (playerId: number) => void;
+  onCharacterChange: (character: string) => void;
+  onAddExcludedCharacter: (character: string) => void;
+  onRemoveExcludedCharacter: (character: string) => void;
+  onClearCharacterFilters: () => void;
   disabled: boolean;
+  characterMenuAlign?: "left" | "right";
 }) {
-  const matchesPlayed = stats.wins + stats.losses;
-  const headlineCharacter = selectedCharacter || player.main_character || "";
+  const headlineCharacter = selectedCharacter;
+  const playerLabel = getPlayerLabel(player);
 
   return (
     <div
-      className={`rounded-2xl border border-gray-700 bg-gray-800/80 p-5 shadow-lg transition-opacity ${
+      className={`flex h-full flex-col rounded-2xl border border-gray-700 bg-gray-800/80 p-5 shadow-lg transition-opacity ${
         disabled ? "opacity-70" : "opacity-100"
       }`}
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
           <div className="relative">
             <PlayerAvatar player={player} />
             {headlineCharacter && (
@@ -285,15 +568,15 @@ function PlayerSummaryCard({
               </div>
             )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <button
               type="button"
               onClick={() => onPlayerClick(player.id)}
               className="truncate text-left text-xl font-bold text-white transition-colors hover:text-yellow-400"
             >
-              {getPlayerLabel(player)}
+              {playerLabel}
             </button>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-300">
+            <div className="mt-1 flex min-h-5 flex-wrap items-center gap-2 text-sm text-gray-300">
               {player.country && isValidCountryCode(player.country) && (
                 <ReactCountryFlag
                   countryCode={player.country.toUpperCase()}
@@ -301,48 +584,53 @@ function PlayerSummaryCard({
                   style={{ width: "1.2rem", height: "0.9rem" }}
                 />
               )}
-              <span>{selectedCharacter ? selectedCharacter : "Any character"}</span>
             </div>
-            {excludedCharacters.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {excludedCharacters.map((character) => (
-                  <span
-                    key={character}
-                    className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 text-xs font-medium text-orange-100"
-                  >
-                    Excluding {character}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        <div
-          className={`rounded-full border px-3 py-1 text-sm font-semibold ${accentClasses}`}
-        >
-          {stats.wins}-{stats.losses}
-        </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => onViewTopCharacters(player.id)}
-          className="col-span-2 rounded-xl border border-blue-500/40 bg-blue-600/15 px-4 py-3 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-600/25 hover:text-white"
-        >
-          View Top Characters
-        </button>
+      <div className="mt-4 w-full">
+        <CharacterFilterControl
+          label={`${playerLabel} character filter`}
+          selectedCharacter={selectedCharacter}
+          availableCharacters={availableCharacters}
+          excludedCharacters={excludedCharacters}
+          disabled={disabled}
+          align={characterMenuAlign}
+          onCharacterChange={onCharacterChange}
+          onAddExcludedCharacter={onAddExcludedCharacter}
+          onRemoveExcludedCharacter={onRemoveExcludedCharacter}
+          onClearFilters={onClearCharacterFilters}
+        />
+      </div>
+      {excludedCharacters.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {excludedCharacters.map((character) => (
+            <button
+              key={character}
+              type="button"
+              onClick={() => onRemoveExcludedCharacter(character)}
+              className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 text-xs font-medium text-orange-100 transition-colors hover:bg-orange-500/20"
+            >
+              Excluding {character}
+              <X size={12} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-5 grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-3">
         <div className="rounded-xl bg-black/20 p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-400">
-            Win %
+          <div className="whitespace-nowrap text-[0.7rem] uppercase tracking-[0.08em] text-gray-400">
+            Longest Streak
           </div>
           <div className="mt-1 text-2xl font-bold text-white">
-            {formatPercent(stats.wins, matchesPlayed)}
+            {stats.longestWinStreak}
           </div>
         </div>
         <div className="rounded-xl bg-black/20 p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-400">
+          <div className="whitespace-nowrap text-[0.7rem] uppercase tracking-[0.08em] text-gray-400">
             K/D Ratio
           </div>
           <div className="mt-1 text-2xl font-bold text-white">
@@ -350,7 +638,7 @@ function PlayerSummaryCard({
           </div>
         </div>
         <div className="rounded-xl bg-black/20 p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-400">
+          <div className="whitespace-nowrap text-[0.7rem] uppercase tracking-[0.08em] text-gray-400">
             KOs
           </div>
           <div className="mt-1 text-xl font-semibold text-orange-300">
@@ -358,7 +646,7 @@ function PlayerSummaryCard({
           </div>
         </div>
         <div className="rounded-xl bg-black/20 p-3">
-          <div className="text-xs uppercase tracking-wide text-gray-400">
+          <div className="whitespace-nowrap text-[0.7rem] uppercase tracking-[0.08em] text-gray-400">
             Falls + SDs
           </div>
           <div className="mt-1 text-xl font-semibold text-purple-300">
@@ -366,125 +654,13 @@ function PlayerSummaryCard({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function PlayerFilterCard({
-  player,
-  selectedCharacter,
-  availableCharacters,
-  excludedCharacters,
-  disabled,
-  onCharacterChange,
-  onAddExcludedCharacter,
-  onRemoveExcludedCharacter,
-  onClearExcludedCharacters,
-}: {
-  player: MatchupExplorerPlayer;
-  selectedCharacter: string;
-  availableCharacters: string[];
-  excludedCharacters: string[];
-  disabled: boolean;
-  onCharacterChange: (character: string) => void;
-  onAddExcludedCharacter: (character: string) => void;
-  onRemoveExcludedCharacter: (character: string) => void;
-  onClearExcludedCharacters: () => void;
-}) {
-  const availableExclusionOptions = availableCharacters.filter(
-    (character) =>
-      character !== selectedCharacter && !excludedCharacters.includes(character)
-  );
-  const headlineCharacter = selectedCharacter || player.main_character || "";
-
-  return (
-    <div className="rounded-2xl border border-gray-700 bg-gray-800/70 p-4 shadow-lg">
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <PlayerAvatar player={player} size="md" />
-          {headlineCharacter && (
-            <div className="absolute -bottom-1 -right-1 rounded-full bg-black p-1 shadow-lg">
-              <CharacterProfilePicture
-                characterName={headlineCharacter}
-                size="sm"
-                className="h-7 w-7 border-gray-300"
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0">
-          <div className="truncate text-base font-semibold text-white">
-            {getPlayerLabel(player)}
-          </div>
-          <div className="text-sm text-gray-400">Character filters</div>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-4">
-        <div>
-          <CharacterDropdown
-            characters={availableCharacters}
-            selectedValues={selectedCharacter ? [selectedCharacter] : []}
-            onChange={(nextSelectedValues) =>
-              onCharacterChange(nextSelectedValues[0] || "")
-            }
-            disabled={disabled}
-            label="Character"
-            placeholder="Any character"
-          />
-        </div>
-
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <label className="text-sm font-medium text-gray-300">
-              Exclude characters
-            </label>
-            {excludedCharacters.length > 0 && (
-              <button
-                type="button"
-                onClick={onClearExcludedCharacters}
-                className="text-xs font-semibold text-gray-400 transition-colors hover:text-white"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          <CharacterDropdown
-            characters={availableExclusionOptions}
-            selectedValues={[]}
-            onChange={(nextSelectedValues) => {
-              const nextCharacter = nextSelectedValues[0];
-              if (nextCharacter) {
-                onAddExcludedCharacter(nextCharacter);
-              }
-            }}
-            disabled={disabled || availableExclusionOptions.length === 0}
-            placeholder={
-              availableExclusionOptions.length > 0
-                ? "Add excluded character"
-                : "No exclusions available"
-            }
-          />
-
-          {excludedCharacters.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {excludedCharacters.map((character) => (
-                <button
-                  key={character}
-                  type="button"
-                  onClick={() => onRemoveExcludedCharacter(character)}
-                  className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 text-xs font-medium text-orange-100 transition-colors hover:bg-orange-500/20"
-                >
-                  <span>{character}</span>
-                  <X size={12} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => onViewTopCharacters(player.id)}
+        className="mt-5 rounded-xl border border-blue-500/40 bg-blue-600/15 px-4 py-3 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-600/25 hover:text-white"
+      >
+        View Top Characters
+      </button>
     </div>
   );
 }
@@ -517,12 +693,12 @@ export default function MatchupExplorer({
     searchParams
       .getAll("player1ExcludeCharacter")
       .map((value) => getCanonicalCharacterName(value))
-  );
+  ).filter((character) => character !== player1Character);
   const player2ExcludedCharacters = getUniqueStringValues(
     searchParams
       .getAll("player2ExcludeCharacter")
       .map((value) => getCanonicalCharacterName(value))
-  );
+  ).filter((character) => character !== player2Character);
   const player1ExcludedCharactersKey = player1ExcludedCharacters.join("||");
   const player2ExcludedCharactersKey = player2ExcludedCharacters.join("||");
   const timeRange = parseMatchupTimeRange(searchParams.get("timeRange"));
@@ -825,7 +1001,18 @@ export default function MatchupExplorer({
   };
 
   const handleCustomTimeRangeClick = () => {
-    syncCustomRange(customStartInput, customEndInput);
+    let nextStartDate = customStartInput;
+    let nextEndDate = customEndInput;
+
+    if (!nextStartDate || !nextEndDate) {
+      const fallbackDateInputs = getPresetDateInputs("30d");
+      nextStartDate = nextStartDate || fallbackDateInputs.startDate;
+      nextEndDate = nextEndDate || fallbackDateInputs.endDate;
+      setCustomStartInput(nextStartDate);
+      setCustomEndInput(nextEndDate);
+    }
+
+    syncCustomRange(nextStartDate, nextEndDate);
   };
 
   const openCharacterRankings = (playerId: number) => {
@@ -983,183 +1170,73 @@ export default function MatchupExplorer({
         </div>
       ) : (
         <div className="mt-6 space-y-6">
-          <div className="rounded-2xl border border-gray-700 bg-gradient-to-br from-gray-900 to-gray-800 p-5 shadow-lg">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">
-                    Filters
-                  </div>
-                  <h3 className="mt-1 text-xl font-bold text-white">
-                    Refine {getPlayerLabel(selectedPlayer1)} vs{" "}
-                    {getPlayerLabel(selectedPlayer2)}
-                  </h3>
+          <div className="rounded-2xl border border-gray-700 bg-gray-900/80 px-4 py-3 shadow-lg">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  Date
+                </span>
+                <div className="flex flex-wrap rounded-full border border-gray-700 bg-black/20 p-1">
+                  {timeRangeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() =>
+                        option.value === "custom"
+                          ? handleCustomTimeRangeClick()
+                          : applyPresetTimeRange(option.value)
+                      }
+                      className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors ${
+                        timeRange === option.value
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="rounded-full border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-200">
-                    {dateRangeLabel}
-                  </div>
-                  {loading && (
-                    <div className="rounded-full border border-blue-500/30 bg-blue-950/30 px-3 py-1.5 text-sm font-medium text-blue-100">
-                      Refreshing
-                    </div>
-                  )}
+                <div className="rounded-full border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-200">
+                  {dateRangeLabel}
                 </div>
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-[1fr_1fr_320px]">
-                <PlayerFilterCard
-                  player={selectedPlayer1}
-                  selectedCharacter={player1Character}
-                  availableCharacters={filteredPlayerOneCharacters}
-                  excludedCharacters={player1ExcludedCharacters}
-                  disabled={!matchup}
-                  onCharacterChange={(character) =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player1Character: character,
-                      player1ExcludedCharacters: player1ExcludedCharacters.filter(
-                        (value) => value !== character
-                      ),
-                    })
-                  }
-                  onAddExcludedCharacter={(character) =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player1ExcludedCharacters: getUniqueStringValues([
-                        ...player1ExcludedCharacters.filter(
-                          (value) => value !== player1Character
-                        ),
-                        character,
-                      ]),
-                    })
-                  }
-                  onRemoveExcludedCharacter={(character) =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player1ExcludedCharacters: player1ExcludedCharacters.filter(
-                        (value) => value !== character
-                      ),
-                    })
-                  }
-                  onClearExcludedCharacters={() =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player1ExcludedCharacters: [],
-                    })
-                  }
-                />
-
-                <PlayerFilterCard
-                  player={selectedPlayer2}
-                  selectedCharacter={player2Character}
-                  availableCharacters={filteredPlayerTwoCharacters}
-                  excludedCharacters={player2ExcludedCharacters}
-                  disabled={!matchup}
-                  onCharacterChange={(character) =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player2Character: character,
-                      player2ExcludedCharacters: player2ExcludedCharacters.filter(
-                        (value) => value !== character
-                      ),
-                    })
-                  }
-                  onAddExcludedCharacter={(character) =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player2ExcludedCharacters: getUniqueStringValues([
-                        ...player2ExcludedCharacters.filter(
-                          (value) => value !== player2Character
-                        ),
-                        character,
-                      ]),
-                    })
-                  }
-                  onRemoveExcludedCharacter={(character) =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player2ExcludedCharacters: player2ExcludedCharacters.filter(
-                        (value) => value !== character
-                      ),
-                    })
-                  }
-                  onClearExcludedCharacters={() =>
-                    updateQuery({
-                      ...baseQueryState,
-                      player2ExcludedCharacters: [],
-                    })
-                  }
-                />
-
-                <div className="flex h-full flex-col justify-between rounded-2xl border border-gray-700 bg-gray-800/70 p-4 shadow-lg">
-                  <label className="mb-3 block text-sm font-medium text-gray-300">
-                    Date Range
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: "all" as const, label: "All" },
-                      { value: "7d" as const, label: "7D" },
-                      { value: "30d" as const, label: "30D" },
-                      { value: "1y" as const, label: "1Y" },
-                      { value: "custom" as const, label: "Custom" },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() =>
-                          option.value === "custom"
-                            ? handleCustomTimeRangeClick()
-                            : applyPresetTimeRange(option.value)
-                        }
-                        className={`rounded-full px-3 py-2 text-sm font-semibold transition-colors ${
-                          timeRange === option.value
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <span>Start</span>
+                  <input
+                    type="date"
+                    value={customStartInput}
+                    onChange={(event) =>
+                      handleCustomStartChange(event.target.value)
+                    }
+                    className="h-9 w-36 rounded-full border border-gray-600 bg-gray-950 px-3 text-sm font-medium normal-case tracking-normal text-white outline-none transition-colors [color-scheme:dark] focus:border-blue-500"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <span>End</span>
+                  <input
+                    type="date"
+                    value={customEndInput}
+                    onChange={(event) =>
+                      handleCustomEndChange(event.target.value)
+                    }
+                    className="h-9 w-36 rounded-full border border-gray-600 bg-gray-950 px-3 text-sm font-medium normal-case tracking-normal text-white outline-none transition-colors [color-scheme:dark] focus:border-blue-500"
+                  />
+                </label>
+                {loading && (
+                  <div className="rounded-full border border-blue-500/30 bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-100">
+                    Refreshing
                   </div>
-
-                  <div className="mt-4 grid gap-3">
-                    <div>
-                      <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Start
-                      </label>
-                      <input
-                        type="date"
-                        value={customStartInput}
-                        onChange={(event) =>
-                          handleCustomStartChange(event.target.value)
-                        }
-                        className="w-full rounded-xl border border-gray-600 bg-gray-900 px-4 py-3 text-white outline-none transition-colors focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        End
-                      </label>
-                      <input
-                        type="date"
-                        value={customEndInput}
-                        onChange={(event) =>
-                          handleCustomEndChange(event.target.value)
-                        }
-                        className="w-full rounded-xl border border-gray-600 bg-gray-900 px-4 py-3 text-white outline-none transition-colors focus:border-blue-500"
-                      />
-                    </div>
-                    {customDateValidationError && (
-                      <div className="text-sm font-medium text-red-400">
-                        {customDateValidationError}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
+
+            {customDateValidationError && (
+              <div className="mt-2 text-sm font-medium text-red-400">
+                {customDateValidationError}
+              </div>
+            )}
           </div>
 
           <>
@@ -1174,18 +1251,6 @@ export default function MatchupExplorer({
                       {getPlayerLabel(selectedPlayer2)}
                     </h3>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="rounded-full border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm font-medium text-white">
-                      {currentMatchCount} filtered matches
-                    </div>
-                    <div className="rounded-full border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300">
-                      {overallMatchCount} total
-                    </div>
-                    <div className="rounded-full border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300">
-                      {dateRangeLabel}
-                    </div>
-                  </div>
                 </div>
 
                 <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_260px_1fr]">
@@ -1198,17 +1263,51 @@ export default function MatchupExplorer({
                         totalKos: 0,
                         totalFalls: 0,
                         totalSds: 0,
+                        longestWinStreak: 0,
                       }
                     }
                     selectedCharacter={player1Character}
+                    availableCharacters={filteredPlayerOneCharacters}
                     excludedCharacters={player1ExcludedCharacters}
-                    accentClasses="border-red-500/30 bg-red-600/20 text-red-100"
                     onPlayerClick={onPlayerClick}
                     onViewTopCharacters={openCharacterRankings}
+                    onCharacterChange={(character) =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player1Character: character,
+                        player1ExcludedCharacters: player1ExcludedCharacters.filter(
+                          (value) => value !== character
+                        ),
+                      })
+                    }
+                    onAddExcludedCharacter={(character) =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player1ExcludedCharacters: getUniqueStringValues([
+                          ...player1ExcludedCharacters,
+                          character,
+                        ]),
+                      })
+                    }
+                    onRemoveExcludedCharacter={(character) =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player1ExcludedCharacters: player1ExcludedCharacters.filter(
+                          (value) => value !== character
+                        ),
+                      })
+                    }
+                    onClearCharacterFilters={() =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player1Character: "",
+                        player1ExcludedCharacters: [],
+                      })
+                    }
                     disabled={!matchup}
                   />
 
-                  <div className="rounded-2xl border border-gray-700 bg-black/20 p-5">
+                  <div className="flex flex-col rounded-2xl border border-gray-700 bg-black/20 p-5">
                     <div className="text-center text-sm uppercase tracking-[0.2em] text-gray-400">
                       Win Split
                     </div>
@@ -1261,6 +1360,14 @@ export default function MatchupExplorer({
                         </div>
                       </div>
                     </div>
+                    <div className="mt-3 rounded-xl border border-gray-700 bg-gray-900/70 px-3 py-2 text-center">
+                      <div className="text-sm font-semibold text-white">
+                        {currentMatchCount} filtered matches
+                      </div>
+                      <div className="mt-0.5 text-xs font-medium text-gray-400">
+                        {overallMatchCount} total
+                      </div>
+                    </div>
                   </div>
 
                   <PlayerSummaryCard
@@ -1272,14 +1379,49 @@ export default function MatchupExplorer({
                         totalKos: 0,
                         totalFalls: 0,
                         totalSds: 0,
+                        longestWinStreak: 0,
                       }
                     }
                     selectedCharacter={player2Character}
+                    availableCharacters={filteredPlayerTwoCharacters}
                     excludedCharacters={player2ExcludedCharacters}
-                    accentClasses="border-blue-500/30 bg-blue-600/20 text-blue-100"
                     onPlayerClick={onPlayerClick}
                     onViewTopCharacters={openCharacterRankings}
+                    onCharacterChange={(character) =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player2Character: character,
+                        player2ExcludedCharacters: player2ExcludedCharacters.filter(
+                          (value) => value !== character
+                        ),
+                      })
+                    }
+                    onAddExcludedCharacter={(character) =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player2ExcludedCharacters: getUniqueStringValues([
+                          ...player2ExcludedCharacters,
+                          character,
+                        ]),
+                      })
+                    }
+                    onRemoveExcludedCharacter={(character) =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player2ExcludedCharacters: player2ExcludedCharacters.filter(
+                          (value) => value !== character
+                        ),
+                      })
+                    }
+                    onClearCharacterFilters={() =>
+                      updateQuery({
+                        ...baseQueryState,
+                        player2Character: "",
+                        player2ExcludedCharacters: [],
+                      })
+                    }
                     disabled={!matchup}
+                    characterMenuAlign="right"
                   />
                 </div>
 

@@ -9,6 +9,8 @@ import {
 import { Player } from "@/lib/prisma";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import {
+  ChevronDown,
+  ChevronUp,
   Check,
   Filter,
   List,
@@ -45,6 +47,7 @@ interface ExtendedPlayer extends Omit<Player, "id" | "elo"> {
   total_falls?: number;
   total_sds?: number;
   current_win_streak?: number;
+  last_one_v_one_won?: boolean | null;
   last_match_date?: string | null;
 }
 
@@ -73,10 +76,15 @@ interface TeamRankingPlayer {
   display_name: string | null;
   country?: string | null;
   picture?: string | null;
+  solo_team: boolean;
+  main_character: string | null;
 }
 
 interface TeamRanking {
   id: string;
+  team_name: string | null;
+  logo: string | null;
+  is_solo_team: boolean;
   player_one: TeamRankingPlayer;
   player_two: TeamRankingPlayer;
   elo: number;
@@ -174,7 +182,6 @@ const MATCHES_PAGE_SIZE = 20;
 const MATCH_CONTEXT_PAGE_SIZE = 2;
 const CHARACTER_RANKINGS_BATCH_SIZE = 50;
 const CHARACTER_RANKING_MIN_MATCHES = 5;
-const TEAM_RANKING_MIN_MATCHES = 3;
 const DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT = 3;
 const TIER_LIST_INACTIVE_GRACE_DAYS = 75;
 const RANKINGS_VIEW_QUERY_PARAM = "rankingsView";
@@ -190,6 +197,24 @@ const CHARACTER_RANKING_PLAYER_LIMIT_OPTIONS: CharacterRankingPlayerRowLimit[] =
   5,
   "all",
 ];
+
+const getSoloTeamPlayer = (
+  teamRanking: TeamRanking
+): TeamRankingPlayer | null => {
+  if (!teamRanking.is_solo_team) {
+    return null;
+  }
+
+  if (teamRanking.player_one.solo_team) {
+    return teamRanking.player_one;
+  }
+
+  if (teamRanking.player_two.solo_team) {
+    return teamRanking.player_two;
+  }
+
+  return teamRanking.player_one;
+};
 const TIER_NAMES: Tier[] = ["S", "A", "B", "C", "D", "E", "F"];
 
 const createEmptyTierList = (): Record<Tier, TierListEntry[]> => ({
@@ -392,7 +417,9 @@ const ProfilePicture = memo(
     borderWidth = "border-2",
     additionalClasses = "",
   }: {
-    player: ExtendedPlayer | { name: string; display_name: string | null };
+    player:
+      | ExtendedPlayer
+      | { name: string; display_name: string | null; picture?: string | null };
     size?: "sm" | "md" | "lg" | "xl";
     borderColor?: string;
     borderWidth?: string;
@@ -513,6 +540,60 @@ const FireStreak = memo(({ streak }: { streak: number }) => {
 });
 
 FireStreak.displayName = "FireStreak";
+
+const getLastOneVOneResult = ({
+  current_win_streak,
+  last_one_v_one_won,
+  matches,
+}: Pick<
+  ExtendedPlayer,
+  "current_win_streak" | "last_one_v_one_won" | "matches"
+>): boolean | null => {
+  if (typeof last_one_v_one_won === "boolean") {
+    return last_one_v_one_won;
+  }
+
+  if (matches <= 0) {
+    return null;
+  }
+
+  return (current_win_streak || 0) > 0;
+};
+
+const LastOneVOneResult = memo(
+  ({
+    player,
+  }: {
+    player: Pick<
+      ExtendedPlayer,
+      "current_win_streak" | "last_one_v_one_won" | "matches"
+    >;
+  }) => {
+    const wonLastOneVOne = getLastOneVOneResult(player);
+
+    if (wonLastOneVOne === null) {
+      return null;
+    }
+
+    const Icon = wonLastOneVOne ? ChevronUp : ChevronDown;
+    const label = wonLastOneVOne ? "Won last 1v1" : "Lost last 1v1";
+    const colorClasses = wonLastOneVOne
+      ? "border-green-400/50 bg-green-500/15 text-green-300 shadow-[0_0_10px_rgba(34,197,94,0.22)]"
+      : "border-red-400/50 bg-red-500/15 text-red-300 shadow-[0_0_10px_rgba(248,113,113,0.22)]";
+
+    return (
+      <span
+        className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border md:h-7 md:w-7 ${colorClasses}`}
+        title={label}
+        aria-label={label}
+      >
+        <Icon size={14} strokeWidth={3} className="md:h-5 md:w-5" />
+      </span>
+    );
+  }
+);
+
+LastOneVOneResult.displayName = "LastOneVOneResult";
 
 interface SmashTournamentELOProps {
   defaultTab?: "tiers" | "rankings" | "matchups" | "matches" | "players";
@@ -858,6 +939,7 @@ export default function SmashTournamentELO({
   const [only1v1, setOnly1v1] = useState<boolean>(false);
   const [only2v2, setOnly2v2] = useState<boolean>(false);
   const [sameTeamOnly, setSameTeamOnly] = useState<boolean>(false);
+  const [teamRankingFilter, setTeamRankingFilter] = useState<string>("");
   const [matchIdSearchInput, setMatchIdSearchInput] = useState<string>("");
   const [matchContextId, setMatchContextId] = useState<number | null>(null);
   const [matchSearchError, setMatchSearchError] = useState<string | null>(null);
@@ -945,12 +1027,17 @@ export default function SmashTournamentELO({
         searchParams.get("sameTeam") === "true" &&
         only2v2Param &&
         playerQueryValues.length === 2;
+      const teamRankingParam = (searchParams.get("teamRanking") || "").replace(
+        /\D/g,
+        ""
+      );
       const matchIdParam = searchParams.get("matchId") || "";
       const hasFilters =
         playerQueryValues.length > 0 ||
         characters.length > 0 ||
         only1v1Param ||
-        only2v2Param;
+        only2v2Param ||
+        teamRankingParam.length > 0;
 
       setSelectedPlayerFilter(
         resolvePlayerQueryValuesToIds(playerQueryValues, players)
@@ -959,6 +1046,7 @@ export default function SmashTournamentELO({
       setOnly1v1(only1v1Param);
       setOnly2v2(only2v2Param);
       setSameTeamOnly(sameTeamParam);
+      setTeamRankingFilter(teamRankingParam);
       setMatchIdSearchInput(matchIdParam.replace(/\D/g, ""));
       setShowFilters(hasFilters);
     }
@@ -970,6 +1058,7 @@ export default function SmashTournamentELO({
   const current1v1Filter = useRef<boolean>(false);
   const current2v2Filter = useRef<boolean>(false);
   const currentSameTeamFilter = useRef<boolean>(false);
+  const currentTeamRankingFilter = useRef<string>("");
   const currentActiveTab = useRef<string>("rankings");
   const currentAutoRefreshDisabled = useRef<boolean>(false);
   const currentLeaderboardTab = useRef<string>("overall");
@@ -996,6 +1085,10 @@ export default function SmashTournamentELO({
   useEffect(() => {
     currentSameTeamFilter.current = sameTeamOnly;
   }, [sameTeamOnly]);
+
+  useEffect(() => {
+    currentTeamRankingFilter.current = teamRankingFilter;
+  }, [teamRankingFilter]);
 
   useEffect(() => {
     currentActiveTab.current = activeTab;
@@ -1102,17 +1195,25 @@ export default function SmashTournamentELO({
 
   const handleTeamClick = (teamRanking: TeamRanking) => {
     const params = new URLSearchParams();
+    const soloTeamPlayer = getSoloTeamPlayer(teamRanking);
+    const teamPlayerIds = soloTeamPlayer
+      ? [soloTeamPlayer.id.toString()]
+      : [
+          teamRanking.player_one.id.toString(),
+          teamRanking.player_two.id.toString(),
+        ];
+
     serializePlayerIdsToQueryValues(
-      [
-        teamRanking.player_one.id.toString(),
-        teamRanking.player_two.id.toString(),
-      ],
+      teamPlayerIds,
       players
     ).forEach((playerQueryValue) => {
       params.append("player", playerQueryValue);
     });
     params.set("only2v2", "true");
-    params.set("sameTeam", "true");
+    params.set("teamRanking", teamRanking.id);
+    if (!soloTeamPlayer) {
+      params.set("sameTeam", "true");
+    }
     router.push(`/matches?${params.toString()}`);
   };
 
@@ -1428,6 +1529,10 @@ export default function SmashTournamentELO({
         searchParams.get("sameTeam") === "true" &&
         only2v2Param &&
         players.length === 2;
+      const teamRankingParam = (searchParams.get("teamRanking") || "").replace(
+        /\D/g,
+        ""
+      );
       const matchIdParam = (searchParams.get("matchId") || "").replace(
         /\D/g,
         ""
@@ -1444,6 +1549,7 @@ export default function SmashTournamentELO({
             bypassBrowserCache: true,
             only2v2Filter: only2v2Param,
             sameTeamFilter: sameTeamParam,
+            teamRankingFilter: teamRankingParam,
           }
         );
       } else {
@@ -1456,7 +1562,8 @@ export default function SmashTournamentELO({
           true,
           true,
           only2v2Param,
-          sameTeamParam
+          sameTeamParam,
+          teamRankingParam
         );
         setMatchesPage(1);
       }
@@ -1534,7 +1641,8 @@ export default function SmashTournamentELO({
     only1v1Filter: boolean,
     matchIdFilter: string = "",
     only2v2Filter: boolean = false,
-    sameTeamFilter: boolean = false
+    sameTeamFilter: boolean = false,
+    teamRankingFilterValue: string = ""
   ) => {
     if (defaultTab === "matches") {
       const params = new URLSearchParams();
@@ -1551,6 +1659,9 @@ export default function SmashTournamentELO({
       if (only2v2Filter && !only1v1Filter) params.append("only2v2", "true");
       if (sameTeamFilter && only2v2Filter && !only1v1Filter) {
         params.append("sameTeam", "true");
+      }
+      if (teamRankingFilterValue.trim()) {
+        params.append("teamRanking", teamRankingFilterValue.trim());
       }
       if (matchIdFilter.trim()) params.append("matchId", matchIdFilter.trim());
       if (showMatchIdSearchParam) params.append("showMatchIdSearch", "true");
@@ -1602,11 +1713,20 @@ export default function SmashTournamentELO({
         playersCache ||
         JSON.parse(localStorage.getItem("playersCache") || "{}");
       if (cacheToUse.data) {
-        setPlayers(cacheToUse.data);
+        const cachedPlayers = (cacheToUse.data as ExtendedPlayer[]).map(
+          (player) => ({
+            ...player,
+            solo_team: player.solo_team ?? false,
+          })
+        );
+        setPlayers(cachedPlayers);
         setLoading(false);
         setLastUpdated(new Date(cacheToUse.timestamp));
         if (!playersCache) {
-          setPlayersCache(cacheToUse);
+          setPlayersCache({
+            data: cachedPlayers,
+            timestamp: cacheToUse.timestamp,
+          });
         }
 
         // Check for hash scroll when using cached data
@@ -1639,6 +1759,10 @@ export default function SmashTournamentELO({
         searchParams.get("sameTeam") === "true" &&
         only2v2Param &&
         players.length === 2;
+      const teamRankingParam = (searchParams.get("teamRanking") || "").replace(
+        /\D/g,
+        ""
+      );
       const matchIdParam = (searchParams.get("matchId") || "").replace(
         /\D/g,
         ""
@@ -1650,6 +1774,7 @@ export default function SmashTournamentELO({
         fetchMatchContext(matchIdParam, players, characters, only1v1Param, {
           only2v2Filter: only2v2Param,
           sameTeamFilter: sameTeamParam,
+          teamRankingFilter: teamRankingParam,
         });
       } else {
         fetchMatches(
@@ -1661,7 +1786,8 @@ export default function SmashTournamentELO({
           false,
           false,
           only2v2Param,
-          sameTeamParam
+          sameTeamParam,
+          teamRankingParam
         );
       }
     }
@@ -1704,7 +1830,8 @@ export default function SmashTournamentELO({
             true,
             false,
             current2v2Filter.current,
-            currentSameTeamFilter.current
+            currentSameTeamFilter.current,
+            currentTeamRankingFilter.current
           );
           setMatchesPage(1);
         }
@@ -1763,6 +1890,7 @@ export default function SmashTournamentELO({
         display_name: string | null;
         elo: number;
         inactive: boolean;
+        solo_team?: boolean;
         is_ranked: boolean;
         top_ten_played: number;
         created_at: string;
@@ -1775,11 +1903,13 @@ export default function SmashTournamentELO({
         total_falls?: number;
         total_sds?: number;
         current_win_streak?: number;
+        last_one_v_one_won?: boolean | null;
       }> = await response.json();
 
       // Process players with real stats from database
       const playersWithMatches = data.map((player) => ({
         ...player,
+        solo_team: player.solo_team ?? false,
         matches: (player.total_wins || 0) + (player.total_losses || 0),
       }));
 
@@ -2012,7 +2142,8 @@ export default function SmashTournamentELO({
     characterFilter: string[] = [],
     only1v1Filter: boolean = false,
     only2v2Filter: boolean = false,
-    sameTeamFilter: boolean = false
+    sameTeamFilter: boolean = false,
+    teamRankingFilterValue: string = ""
   ) => {
     playerFilter.forEach((player) => params.append("player", player));
     characterFilter.forEach((character) =>
@@ -2029,6 +2160,10 @@ export default function SmashTournamentELO({
 
     if (sameTeamFilter && only2v2Filter && !only1v1Filter) {
       params.append("sameTeam", "true");
+    }
+
+    if (teamRankingFilterValue.trim()) {
+      params.append("teamRanking", teamRankingFilterValue.trim());
     }
   };
 
@@ -2055,7 +2190,8 @@ export default function SmashTournamentELO({
     isBackgroundRefresh: boolean = false,
     bypassBrowserCache: boolean = false,
     only2v2Filter: boolean = false,
-    sameTeamFilter: boolean = false
+    sameTeamFilter: boolean = false,
+    teamRankingFilterValue: string = ""
   ) => {
     // Only set loading state for initial page load (not for appending or background refresh)
     if (!append && !isBackgroundRefresh) {
@@ -2072,7 +2208,8 @@ export default function SmashTournamentELO({
         characterFilter || [],
         only1v1Filter || false,
         only2v2Filter,
-        sameTeamFilter
+        sameTeamFilter,
+        teamRankingFilterValue
       );
 
       const url = `/api/matches?${params.toString()}`;
@@ -2130,6 +2267,7 @@ export default function SmashTournamentELO({
       bypassBrowserCache?: boolean;
       only2v2Filter?: boolean;
       sameTeamFilter?: boolean;
+      teamRankingFilter?: string;
     } = {}
   ) => {
     const {
@@ -2137,6 +2275,7 @@ export default function SmashTournamentELO({
       bypassBrowserCache = false,
       only2v2Filter = false,
       sameTeamFilter = false,
+      teamRankingFilter = "",
     } = options;
     const trimmedMatchId = matchId.trim();
 
@@ -2163,7 +2302,8 @@ export default function SmashTournamentELO({
         characterFilter,
         only1v1Filter,
         only2v2Filter,
-        sameTeamFilter
+        sameTeamFilter,
+        teamRankingFilter
       );
 
       const response = await fetch(`/api/matches?${params.toString()}`, {
@@ -2216,7 +2356,8 @@ export default function SmashTournamentELO({
       false,
       false,
       only2v2,
-      sameTeamOnly
+      sameTeamOnly,
+      teamRankingFilter
     );
     setMatchesPage(nextPage);
     setLoadingMoreMatches(false);
@@ -2264,7 +2405,8 @@ export default function SmashTournamentELO({
         selectedCharacterFilter,
         only1v1,
         only2v2,
-        sameTeamOnly
+        sameTeamOnly,
+        teamRankingFilter
       );
 
       const response = await fetch(`/api/matches?${params.toString()}`);
@@ -2348,14 +2490,19 @@ export default function SmashTournamentELO({
       only1v1,
       trimmedMatchId,
       only2v2,
-      sameTeamOnly
+      sameTeamOnly,
+      teamRankingFilter
     );
     await fetchMatchContext(
       trimmedMatchId,
       selectedPlayerFilter,
       selectedCharacterFilter,
       only1v1,
-      { only2v2Filter: only2v2, sameTeamFilter: sameTeamOnly }
+      {
+        only2v2Filter: only2v2,
+        sameTeamFilter: sameTeamOnly,
+        teamRankingFilter,
+      }
     );
   };
 
@@ -2374,7 +2521,8 @@ export default function SmashTournamentELO({
       only1v1,
       "",
       only2v2,
-      sameTeamOnly
+      sameTeamOnly,
+      teamRankingFilter
     );
     await fetchMatches(
       1,
@@ -2385,7 +2533,8 @@ export default function SmashTournamentELO({
       false,
       false,
       only2v2,
-      sameTeamOnly
+      sameTeamOnly,
+      teamRankingFilter
     );
   };
 
@@ -2415,14 +2564,19 @@ export default function SmashTournamentELO({
         only1v1,
         trimmedMatchId,
         only2v2,
-        sameTeamOnly
+        sameTeamOnly,
+        teamRankingFilter
       );
       await fetchMatchContext(
         trimmedMatchId,
         selectedPlayerFilter,
         selectedCharacterFilter,
         only1v1,
-        { only2v2Filter: only2v2, sameTeamFilter: sameTeamOnly }
+        {
+          only2v2Filter: only2v2,
+          sameTeamFilter: sameTeamOnly,
+          teamRankingFilter,
+        }
       );
       return;
     }
@@ -2435,7 +2589,8 @@ export default function SmashTournamentELO({
       only1v1,
       "",
       only2v2,
-      sameTeamOnly
+      sameTeamOnly,
+      teamRankingFilter
     );
     await fetchMatches(
       1,
@@ -2446,7 +2601,8 @@ export default function SmashTournamentELO({
       false,
       false,
       only2v2,
-      sameTeamOnly
+      sameTeamOnly,
+      teamRankingFilter
     );
   };
 
@@ -2516,36 +2672,39 @@ export default function SmashTournamentELO({
   );
 
   const activeTeamRankings = teamRankings.filter((teamRanking) => {
+    const soloTeamPlayer = getSoloTeamPlayer(teamRanking);
     const playerOne = playersById.get(teamRanking.player_one.id);
     const playerTwo = playersById.get(teamRanking.player_two.id);
+
+    if (soloTeamPlayer) {
+      const soloPlayer = playersById.get(soloTeamPlayer.id);
+
+      return Boolean(soloPlayer) && !soloPlayer?.inactive;
+    }
 
     if (!playerOne || !playerTwo) {
       return false;
     }
 
-    return (
-      teamRanking.matches >= TEAM_RANKING_MIN_MATCHES &&
-      playerOne.is_ranked &&
-      playerTwo.is_ranked &&
-      !playerOne.inactive &&
-      !playerTwo.inactive
-    );
+    return !playerOne.inactive && !playerTwo.inactive;
   });
 
   const inactiveTeamRankings = teamRankings.filter((teamRanking) => {
+    const soloTeamPlayer = getSoloTeamPlayer(teamRanking);
     const playerOne = playersById.get(teamRanking.player_one.id);
     const playerTwo = playersById.get(teamRanking.player_two.id);
+
+    if (soloTeamPlayer) {
+      const soloPlayer = playersById.get(soloTeamPlayer.id);
+
+      return Boolean(soloPlayer?.inactive);
+    }
 
     if (!playerOne || !playerTwo) {
       return false;
     }
 
-    return (
-      teamRanking.matches >= TEAM_RANKING_MIN_MATCHES &&
-      playerOne.is_ranked &&
-      playerTwo.is_ranked &&
-      (playerOne.inactive || playerTwo.inactive)
-    );
+    return playerOne.inactive || playerTwo.inactive;
   });
 
   const displayedTeamRankings = activeTeamRankings;
@@ -2647,8 +2806,13 @@ export default function SmashTournamentELO({
     hasCharacterRankingPlayerFilters ||
     hasCharacterRankingRowLimit ||
     characterRankingPlayerFilterMode !== "include";
+  const playersTabRankedSourcePlayers = sortedPlayers.filter(
+    (player) => player.is_ranked
+  );
   const playersTabRankedPlayers = (() => {
-    const rankedPlayersById = new Map(rankedPlayers.map((player) => [player.id, player]));
+    const rankedPlayersById = new Map(
+      playersTabRankedSourcePlayers.map((player) => [player.id, player])
+    );
     const seenPlayerIds = new Set<number>();
     const orderedRankedPlayers: ExtendedPlayer[] = [];
 
@@ -2662,7 +2826,7 @@ export default function SmashTournamentELO({
       orderedRankedPlayers.push(rankedPlayer);
     });
 
-    rankedPlayers.forEach((rankedPlayer) => {
+    playersTabRankedSourcePlayers.forEach((rankedPlayer) => {
       if (seenPlayerIds.has(rankedPlayer.id)) {
         return;
       }
@@ -2881,14 +3045,17 @@ export default function SmashTournamentELO({
               <th className="px-2 py-3 md:px-6 md:py-6 text-left text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider rounded-tl-xl w-24">
                 {showLastPlayed ? "Last Played" : "Rank"}
               </th>
+              <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-16">
+                Logo
+              </th>
               <th className="px-2 py-3 md:px-4 md:py-6 text-left text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider">
-                Team
+                Team Name
               </th>
               <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-16">
                 Team ELO
               </th>
-              <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-28">
-                Player ELOs
+              <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-24">
+                Mains
               </th>
               <th className="px-1 py-3 md:px-3 md:py-6 text-center text-xs md:text-lg font-bold text-gray-300 uppercase tracking-wider w-24">
                 Record
@@ -2901,17 +3068,27 @@ export default function SmashTournamentELO({
           <tbody className="bg-gray-900 divide-y divide-gray-800">
             {teamRows.map((teamRanking, index, currentTeamRankings) => {
               const isLast = index === currentTeamRankings.length - 1;
+              const soloTeamPlayer = getSoloTeamPlayer(teamRanking);
               const playerOneName =
                 teamRanking.player_one.display_name || teamRanking.player_one.name;
               const playerTwoName =
                 teamRanking.player_two.display_name || teamRanking.player_two.name;
-              const teamName = `${playerOneName} + ${playerTwoName}`;
-              const playerOne = playersById.get(teamRanking.player_one.id);
-              const playerTwo = playersById.get(teamRanking.player_two.id);
-              const playerOneOverallElo = playerOne?.elo ?? 0;
-              const playerTwoOverallElo = playerTwo?.elo ?? 0;
-              const combinedPlayerElo =
-                playerOneOverallElo + playerTwoOverallElo;
+              const soloTeamPlayerName = soloTeamPlayer
+                ? soloTeamPlayer.display_name || soloTeamPlayer.name
+                : "";
+              const teamName = soloTeamPlayer
+                ? soloTeamPlayerName
+                : `${playerOneName} + ${playerTwoName}`;
+              const customTeamName = teamRanking.team_name?.trim() || "";
+              const displayTeamName = customTeamName || teamName;
+              const primaryDisplayPlayer =
+                soloTeamPlayer || teamRanking.player_one;
+              const primaryDisplayPlayerName = soloTeamPlayer
+                ? soloTeamPlayerName
+                : playerOneName;
+              const teamMainPlayers = soloTeamPlayer
+                ? [soloTeamPlayer]
+                : [teamRanking.player_one, teamRanking.player_two];
               const daysAgo = getDaysAgo(teamRanking.last_match_date);
 
               return (
@@ -2919,7 +3096,7 @@ export default function SmashTournamentELO({
                   key={teamRanking.id}
                   onClick={() => handleTeamClick(teamRanking)}
                   className="cursor-pointer hover:bg-gray-800 transition-colors duration-150"
-                  title={`View 2v2 match history for ${teamName}`}
+                  title={`View 2v2 match history for ${displayTeamName}`}
                 >
                   <td
                     className={`px-2 py-3 md:px-6 md:py-8 whitespace-nowrap ${
@@ -2950,50 +3127,120 @@ export default function SmashTournamentELO({
                       )}
                     </div>
                   </td>
+                  <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
+                    {teamRanking.logo ? (
+                      <div className="inline-flex justify-center">
+                        <ProfilePicture
+                          player={{
+                            name: displayTeamName,
+                            display_name: displayTeamName,
+                            picture: teamRanking.logo,
+                          }}
+                          size="sm"
+                          borderWidth="border-0"
+                          additionalClasses="rounded-lg bg-transparent"
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-gray-500 text-xs">-</span>
+                    )}
+                  </td>
                   <td className="px-2 py-3 md:px-6 md:py-8 text-white">
-                    <div
-                      className="flex min-w-[16rem] flex-wrap items-center gap-3 md:gap-4"
-                      title={teamName}
-                    >
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handlePlayerClick(teamRanking.player_one.id);
-                        }}
-                        className="flex min-w-0 items-center gap-2 text-left hover:opacity-80"
+                    {customTeamName ? (
+                      <div
+                        className="flex min-w-[16rem] items-center gap-3 md:gap-4"
+                        title={`${customTeamName}: ${teamName}`}
                       >
-                        <ProfilePicture
-                          player={teamRanking.player_one}
-                          size="sm"
-                        />
-                        <span className="truncate text-sm font-bold md:text-xl">
-                          {playerOneName}
+                        <div className="flex shrink-0 -space-x-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handlePlayerClick(primaryDisplayPlayer.id);
+                            }}
+                            className="relative z-10 hover:opacity-80"
+                            title={primaryDisplayPlayerName}
+                          >
+                            <ProfilePicture
+                              player={primaryDisplayPlayer}
+                              size="sm"
+                              additionalClasses="ring-2 ring-gray-900"
+                            />
+                          </button>
+                          {!soloTeamPlayer && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handlePlayerClick(teamRanking.player_two.id);
+                              }}
+                              className="relative hover:opacity-80"
+                              title={playerTwoName}
+                            >
+                              <ProfilePicture
+                                player={teamRanking.player_two}
+                                size="sm"
+                                additionalClasses="ring-2 ring-gray-900"
+                              />
+                            </button>
+                          )}
+                        </div>
+                        <span className="min-w-0 truncate text-sm font-bold md:text-xl">
+                          {customTeamName}
                         </span>
-                      </button>
-                      <span className="text-lg font-bold text-gray-500 md:text-2xl">
-                        +
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handlePlayerClick(teamRanking.player_two.id);
-                        }}
-                        className="flex min-w-0 items-center gap-2 text-left hover:opacity-80"
+                        <FireStreak
+                          streak={teamRanking.current_win_streak || 0}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="flex min-w-[16rem] flex-wrap items-center gap-3 md:gap-4"
+                        title={teamName}
                       >
-                        <ProfilePicture
-                          player={teamRanking.player_two}
-                          size="sm"
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handlePlayerClick(primaryDisplayPlayer.id);
+                          }}
+                          className="flex min-w-0 items-center gap-2 text-left hover:opacity-80"
+                        >
+                          <ProfilePicture
+                            player={primaryDisplayPlayer}
+                            size="sm"
+                          />
+                          <span className="truncate text-sm font-bold md:text-xl">
+                            {primaryDisplayPlayerName}
+                          </span>
+                        </button>
+                        {!soloTeamPlayer && (
+                          <>
+                            <span className="text-lg font-bold text-gray-500 md:text-2xl">
+                              +
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handlePlayerClick(teamRanking.player_two.id);
+                              }}
+                              className="flex min-w-0 items-center gap-2 text-left hover:opacity-80"
+                            >
+                              <ProfilePicture
+                                player={teamRanking.player_two}
+                                size="sm"
+                              />
+                              <span className="truncate text-sm font-bold md:text-xl">
+                                {playerTwoName}
+                              </span>
+                            </button>
+                          </>
+                        )}
+                        <FireStreak
+                          streak={teamRanking.current_win_streak || 0}
                         />
-                        <span className="truncate text-sm font-bold md:text-xl">
-                          {playerTwoName}
-                        </span>
-                      </button>
-                      <FireStreak
-                        streak={teamRanking.current_win_streak || 0}
-                      />
-                    </div>
+                      </div>
+                    )}
                   </td>
                   <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
                     <span
@@ -3006,9 +3253,28 @@ export default function SmashTournamentELO({
                     </span>
                   </td>
                   <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
-                    <span className="text-sm md:text-xl font-bold text-blue-200 bg-gray-800 px-2 py-1 md:px-4 md:py-2 rounded-full">
-                      {combinedPlayerElo}
-                    </span>
+                    <div className="inline-flex items-center justify-center -space-x-3">
+                      {teamMainPlayers.map((player) => {
+                        if (!player.main_character) {
+                          return (
+                            <div
+                              key={player.id}
+                              className="h-8 w-8 rounded-full border-2 border-gray-700 bg-gray-800 md:h-10 md:w-10"
+                            />
+                          );
+                        }
+
+                        return (
+                          <CharacterProfilePicture
+                            key={player.id}
+                            characterName={player.main_character}
+                            size="sm"
+                            className="h-8 w-8 border-2 border-gray-900 shadow-lg md:h-10 md:w-10"
+                            alt={`${player.main_character} portrait`}
+                          />
+                        );
+                      })}
+                    </div>
                   </td>
                   <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
                     <div className="text-sm font-bold text-gray-200 md:text-xl">
@@ -3390,9 +3656,9 @@ export default function SmashTournamentELO({
                     )}
                     {leaderboardTab === "teams" && (
                       <div className="mt-2 text-sm text-gray-400">
-                        2v2 teams where both teammates are ranked and
-                        have played at least {TEAM_RANKING_MIN_MATCHES} games
-                        together. Inactive teams appear at the bottom.
+                        Curated 2v2 teams from the team rankings table. Players
+                        flagged as solo teams are tracked as their own 2v2
+                        team. Inactive teams appear at the bottom.
                       </div>
                     )}
                   </div>
@@ -3423,8 +3689,7 @@ export default function SmashTournamentELO({
                       </p>
                       <p className="mt-2 text-lg">
                         2v2 rows appear after the capture pipeline has written
-                        persisted team ELOs for ranked teammates with at least{" "}
-                        {TEAM_RANKING_MIN_MATCHES} games together.
+                        persisted team ELOs for curated teams.
                       </p>
                     </div>
                   ) : isCharacterLeaderboard &&
@@ -3674,15 +3939,20 @@ export default function SmashTournamentELO({
                                           </div>
                                         </td>
                                         <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
-                                          <span
-                                            className="text-sm md:text-2xl font-bold text-yellow-500 bg-gray-800 px-2 py-1 md:px-4 md:py-2 rounded-full"
-                                            style={{
-                                              textShadow:
-                                                "0 0 10px rgba(255, 215, 0, 0.6)",
-                                            }}
-                                          >
-                                            {characterRanking.elo}
-                                          </span>
+                                          <div className="inline-flex items-center justify-center gap-1.5 md:gap-2">
+                                            <LastOneVOneResult
+                                              player={characterRanking}
+                                            />
+                                            <span
+                                              className="text-sm md:text-2xl font-bold text-yellow-500 bg-gray-800 px-2 py-1 md:px-4 md:py-2 rounded-full"
+                                              style={{
+                                                textShadow:
+                                                  "0 0 10px rgba(255, 215, 0, 0.6)",
+                                              }}
+                                            >
+                                              {characterRanking.elo}
+                                            </span>
+                                          </div>
                                         </td>
                                         <td
                                           className={`px-1 py-3 md:px-2 md:py-8 text-center whitespace-nowrap ${
@@ -3803,15 +4073,20 @@ export default function SmashTournamentELO({
                                       </td>
                                       {leaderboardTab !== "unranked" && (
                                         <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
-                                          <span
-                                            className="text-sm md:text-2xl font-bold text-yellow-500 bg-gray-800 px-2 py-1 md:px-4 md:py-2 rounded-full"
-                                            style={{
-                                              textShadow:
-                                                "0 0 10px rgba(255, 215, 0, 0.6)",
-                                            }}
-                                          >
-                                            {player.elo}
-                                          </span>
+                                          <div className="inline-flex items-center justify-center gap-1.5 md:gap-2">
+                                            <LastOneVOneResult
+                                              player={player}
+                                            />
+                                            <span
+                                              className="text-sm md:text-2xl font-bold text-yellow-500 bg-gray-800 px-2 py-1 md:px-4 md:py-2 rounded-full"
+                                              style={{
+                                                textShadow:
+                                                  "0 0 10px rgba(255, 215, 0, 0.6)",
+                                              }}
+                                            >
+                                              {player.elo}
+                                            </span>
+                                          </div>
                                         </td>
                                       )}
                                       <td
@@ -4006,15 +4281,18 @@ export default function SmashTournamentELO({
                                         </div>
                                       </td>
                                       <td className="px-1 py-3 md:px-3 md:py-8 text-center whitespace-nowrap">
-                                        <span
-                                          className="text-sm md:text-2xl font-bold text-yellow-500 bg-gray-800 px-2 py-1 md:px-4 md:py-2 rounded-full"
-                                          style={{
-                                            textShadow:
-                                              "0 0 10px rgba(255, 215, 0, 0.6)",
-                                          }}
-                                        >
-                                          {player.elo}
-                                        </span>
+                                        <div className="inline-flex items-center justify-center gap-1.5 md:gap-2">
+                                          <LastOneVOneResult player={player} />
+                                          <span
+                                            className="text-sm md:text-2xl font-bold text-yellow-500 bg-gray-800 px-2 py-1 md:px-4 md:py-2 rounded-full"
+                                            style={{
+                                              textShadow:
+                                                "0 0 10px rgba(255, 215, 0, 0.6)",
+                                            }}
+                                          >
+                                            {player.elo}
+                                          </span>
+                                        </div>
                                       </td>
                                       <td
                                         className={`px-1 py-3 md:px-2 md:py-8 text-center ${
@@ -4555,6 +4833,7 @@ export default function SmashTournamentELO({
                                     onChange={(nextPlayerIds) => {
                                       setSelectedPlayerFilter(nextPlayerIds);
                                       setSameTeamOnly(false);
+                                      setTeamRankingFilter("");
                                     }}
                                     placeholder="All players"
                                     label="Players"
@@ -4576,7 +4855,10 @@ export default function SmashTournamentELO({
                                       )
                                     ).sort()}
                                     selectedValues={selectedCharacterFilter}
-                                    onChange={setSelectedCharacterFilter}
+                                    onChange={(nextCharacters) => {
+                                      setSelectedCharacterFilter(nextCharacters);
+                                      setTeamRankingFilter("");
+                                    }}
                                     placeholder="Any character"
                                     label="Characters"
                                     multiple
@@ -4595,6 +4877,7 @@ export default function SmashTournamentELO({
                                       const checked = e.target.checked;
                                       setOnly1v1(checked);
                                       setSameTeamOnly(false);
+                                      setTeamRankingFilter("");
                                       if (checked) {
                                         setOnly2v2(false);
                                       }
@@ -4615,6 +4898,7 @@ export default function SmashTournamentELO({
                                       const checked = e.target.checked;
                                       setOnly2v2(checked);
                                       setSameTeamOnly(false);
+                                      setTeamRankingFilter("");
                                       if (checked) {
                                         setOnly1v1(false);
                                       }
@@ -4649,6 +4933,7 @@ export default function SmashTournamentELO({
                                     setOnly1v1(false);
                                     setOnly2v2(false);
                                     setSameTeamOnly(false);
+                                    setTeamRankingFilter("");
                                     setMatchIdSearchInput("");
                                     setMatchContextId(null);
                                     setMatchSearchError(null);
@@ -4762,6 +5047,7 @@ export default function SmashTournamentELO({
                                                 setOnly1v1(is1v1);
                                                 setOnly2v2(is2v2);
                                                 setSameTeamOnly(false);
+                                                setTeamRankingFilter("");
                                                 setMatchIdSearchInput(nextMatchId);
                                                 setShowFilters(true);
                                                 setTimeout(async () => {
@@ -4999,6 +5285,13 @@ export default function SmashTournamentELO({
                                         #{index + 1}
                                       </div>
                                     </div>
+                                    {player.inactive && (
+                                      <div className="absolute top-4 left-4">
+                                        <div className="rounded-full border border-gray-500 bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300 shadow-lg">
+                                          Inactive
+                                        </div>
+                                      </div>
+                                    )}
 
                                     {/* Player Avatar and Info */}
                                     <div className="flex flex-col items-center mb-6">
@@ -5257,6 +5550,13 @@ export default function SmashTournamentELO({
                                     className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 border border-gray-700 hover:border-gray-600 transition-all duration-300 hover:transform hover:scale-105 shadow-lg relative overflow-hidden"
                                   >
                                     {/* No rank badge for unranked players */}
+                                    {player.inactive && (
+                                      <div className="absolute top-4 right-4">
+                                        <div className="rounded-full border border-gray-500 bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300 shadow-lg">
+                                          Inactive
+                                        </div>
+                                      </div>
+                                    )}
 
                                     {/* Player Avatar and Info */}
                                     <div className="flex flex-col items-center mb-6">

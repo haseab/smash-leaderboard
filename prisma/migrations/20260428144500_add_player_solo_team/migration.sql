@@ -1,0 +1,2 @@
+ALTER TABLE "players"
+ADD COLUMN "solo_team" BOOLEAN NOT NULL DEFAULT false;

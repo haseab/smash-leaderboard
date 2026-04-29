@@ -131,6 +131,105 @@ const normalizeContextMatches = (
   return direction === "above" ? [...visibleMatches].reverse() : visibleMatches;
 };
 
+const getQualifyingTeamRankingMatchIds = async (teamRankingId: number) => {
+  const query = `
+    WITH target_team AS (
+      SELECT
+        tr.id,
+        CASE
+          WHEN p1.solo_team AND p2.solo_team
+            THEN 'solo:' || LEAST(tr.player_one, tr.player_two)::text
+          WHEN p1.solo_team
+            THEN 'solo:' || tr.player_one::text
+          WHEN p2.solo_team
+            THEN 'solo:' || tr.player_two::text
+          ELSE LEAST(tr.player_one, tr.player_two)::text
+            || ':'
+            || GREATEST(tr.player_one, tr.player_two)::text
+        END AS team_key
+      FROM team_rankings tr
+      JOIN players p1 ON p1.id = tr.player_one
+      JOIN players p2 ON p2.id = tr.player_two
+      WHERE tr.id = $1::bigint
+    ),
+    approved_teams AS (
+      SELECT DISTINCT
+        CASE
+          WHEN p1.solo_team AND p2.solo_team
+            THEN 'solo:' || LEAST(tr.player_one, tr.player_two)::text
+          WHEN p1.solo_team
+            THEN 'solo:' || tr.player_one::text
+          WHEN p2.solo_team
+            THEN 'solo:' || tr.player_two::text
+          ELSE LEAST(tr.player_one, tr.player_two)::text
+            || ':'
+            || GREATEST(tr.player_one, tr.player_two)::text
+        END AS team_key
+      FROM team_rankings tr
+      JOIN players p1 ON p1.id = tr.player_one
+      JOIN players p2 ON p2.id = tr.player_two
+      WHERE (
+          (p1.solo_team AND p1.banned = false)
+          OR (p2.solo_team AND p2.banned = false)
+          OR (p1.banned = false AND p2.banned = false)
+        )
+        AND (
+          (p1.solo_team AND p1.top_ten_played >= 3)
+          OR (p2.solo_team AND p2.top_ten_played >= 3)
+          OR (p1.top_ten_played >= 3 AND p2.top_ten_played >= 3)
+        )
+    ),
+    team_sides AS (
+      SELECT
+        mp.match_id,
+        mp.has_won,
+        CASE
+          WHEN BOOL_OR(p.solo_team)
+            THEN 'solo:' || MIN(CASE WHEN p.solo_team THEN mp.player END)::text
+          ELSE LEAST(MIN(mp.player), MAX(mp.player))::text
+            || ':'
+            || GREATEST(MIN(mp.player), MAX(mp.player))::text
+        END AS team_key,
+        CASE
+          WHEN BOOL_OR(p.solo_team)
+            THEN BOOL_OR(p.solo_team AND p.top_ten_played >= 3)
+          ELSE BOOL_AND(p.top_ten_played >= 3)
+        END AS is_ranked_team
+      FROM match_participants mp
+      JOIN players p ON p.id = mp.player
+      WHERE mp.is_cpu = false
+      GROUP BY mp.match_id, mp.has_won
+      HAVING COUNT(*) = 2
+    )
+    SELECT m.id
+    FROM matches m
+    JOIN target_team tt ON true
+    JOIN team_sides winners ON winners.match_id = m.id AND winners.has_won = true
+    JOIN team_sides losers ON losers.match_id = m.id AND losers.has_won = false
+    WHERE m.archived = false
+      AND NOT EXISTS (
+        SELECT 1
+        FROM match_participants mp_hidden
+        JOIN players p_hidden ON p_hidden.id = mp_hidden.player
+        WHERE mp_hidden.match_id = m.id
+          AND mp_hidden.is_cpu = false
+          AND p_hidden.banned = true
+      )
+      AND (
+        SELECT COUNT(*)
+        FROM match_participants mp_count
+        WHERE mp_count.match_id = m.id AND mp_count.is_cpu = false
+      ) = 4
+      AND winners.is_ranked_team = true
+      AND losers.is_ranked_team = true
+      AND winners.team_key IN (SELECT team_key FROM approved_teams)
+      AND losers.team_key IN (SELECT team_key FROM approved_teams)
+      AND (winners.team_key = tt.team_key OR losers.team_key = tt.team_key)
+  `;
+
+  return prisma.$queryRawUnsafe<Array<{ id: bigint }>>(query, teamRankingId);
+};
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -150,6 +249,7 @@ export async function GET(request: Request) {
     const only2v2 = searchParams.get("only2v2") === "true" && !only1v1;
     const participantCountFilter = only1v1 ? 2 : only2v2 ? 4 : null;
     const sameTeamOnly = searchParams.get("sameTeam") === "true";
+    const teamRankingParam = searchParams.get("teamRanking");
     const matchIdParam = searchParams.get("matchId");
     const directionParam = searchParams.get("direction");
     const cursorMatchIdParam = searchParams.get("cursorMatchId");
@@ -174,6 +274,20 @@ export async function GET(request: Request) {
       directionParam === "above" || directionParam === "below"
         ? directionParam
         : null;
+    const teamRankingId = teamRankingParam
+      ? parseInt(teamRankingParam, 10)
+      : null;
+
+    if (
+      teamRankingParam &&
+      (!Number.isInteger(teamRankingId) || (teamRankingId ?? 0) <= 0)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid team ranking ID" },
+        { status: 400 }
+      );
+    }
+
     const {
       playerIds: resolvedPlayerFilterIds,
       allResolved: allPlayerFiltersResolved,
@@ -186,6 +300,7 @@ export async function GET(request: Request) {
       only1v1,
       only2v2,
       sameTeamOnly,
+      teamRankingId,
       matchIdParam,
       directionParam,
       cursorMatchIdParam,
@@ -221,6 +336,22 @@ export async function GET(request: Request) {
         },
       },
     ];
+
+    if (teamRankingId !== null) {
+      const qualifyingTeamMatchIds =
+        await getQualifyingTeamRankingMatchIds(teamRankingId);
+
+      if (qualifyingTeamMatchIds.length === 0 && !matchIdParam) {
+        return NextResponse.json({
+          matches: [],
+          pagination: { page, limit, hasMore: false },
+        });
+      }
+
+      whereConditions.push({
+        id: { in: qualifyingTeamMatchIds.map((match) => match.id) },
+      });
+    }
 
     // Handle participant-count filters: exactly 2 or 4 non-CPU participants
     // Prisma doesn't support HAVING COUNT in where clauses, so we use raw SQL

@@ -13,6 +13,7 @@ interface PlayerQueryResult {
   country: string | null;
   picture: string | null;
   inactive: boolean;
+  solo_team: boolean;
   top_ten_played: number;
   main_character: string | null;
   total_wins: bigint;
@@ -21,6 +22,7 @@ interface PlayerQueryResult {
   total_falls: bigint;
   total_sds: bigint;
   current_win_streak: bigint;
+  last_one_v_one_won: boolean | null;
   is_ranked: boolean;
   last_match_date: Date | null;
 }
@@ -32,6 +34,7 @@ interface TransformedPlayer {
   display_name: string | null;
   elo: number;
   inactive: boolean;
+  solo_team: boolean;
   is_ranked: boolean;
   top_ten_played: number;
   country: string | null;
@@ -43,6 +46,7 @@ interface TransformedPlayer {
   total_falls: number;
   total_sds: number;
   current_win_streak: number;
+  last_one_v_one_won: boolean | null;
   last_match_date: string | null;
 }
 
@@ -137,6 +141,15 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     GROUP BY opm.player
   ),
 
+  -- Most recent 1v1 result for each player
+  last_one_v_one_results AS (
+    SELECT
+      player,
+      has_won as last_one_v_one_won
+    FROM ordered_player_matches
+    WHERE match_order = 1
+  ),
+
   -- Last match date for each player (from all matches, not just 1v1)
   last_match_dates AS (
     SELECT
@@ -158,6 +171,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     p.country,
     p.picture,
     p.inactive,
+    p.solo_team,
     p.top_ten_played,
     COALESCE(mc.smash_character, NULL) as main_character,
     COALESCE(ps.total_wins, 0) as total_wins,
@@ -166,12 +180,14 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     COALESCE(ps.total_falls, 0) as total_falls,
     COALESCE(ps.total_sds, 0) as total_sds,
     COALESCE(ws.current_win_streak, 0) as current_win_streak,
+    loor.last_one_v_one_won,
     CASE WHEN p.top_ten_played >= 3 THEN true ELSE false END as is_ranked,
     lmd.last_match_date
   FROM players p
   LEFT JOIN main_chars mc ON p.id = mc.player AND mc.rn = 1
   LEFT JOIN player_stats ps ON p.id = ps.player
   LEFT JOIN win_streaks ws ON p.id = ws.player
+  LEFT JOIN last_one_v_one_results loor ON p.id = loor.player
   LEFT JOIN last_match_dates lmd ON p.id = lmd.player
   WHERE p.banned = false
   ORDER BY p.elo DESC;
@@ -187,6 +203,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     display_name: player.display_name,
     elo: Number(player.elo),
     inactive: player.inactive,
+    solo_team: player.solo_team,
     is_ranked: player.is_ranked,
     top_ten_played: player.top_ten_played,
     country: player.country,
@@ -200,6 +217,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
     total_falls: Number(player.total_falls),
     total_sds: Number(player.total_sds),
     current_win_streak: Number(player.current_win_streak),
+    last_one_v_one_won: player.last_one_v_one_won,
     last_match_date: player.last_match_date
       ? player.last_match_date.toISOString()
       : null,
@@ -211,7 +229,7 @@ async function fetchPlayersFromDb(): Promise<TransformedPlayer[]> {
 // Cache the expensive query - only revalidated when "players" tag is invalidated
 const getCachedPlayers = unstable_cache(
   fetchPlayersFromDb,
-  ["players-data"],
+  ["players-data-with-solo-team-and-last-1v1-result"],
   {
     tags: ["players"],
     // No automatic revalidation - only on-demand via revalidateTag("players")
