@@ -44,6 +44,8 @@ type WinnerStockBadge = {
   variant: "gold" | "silver";
 };
 
+const STARTING_STOCKS = 3;
+
 const getParticipantDisplayName = (participant: MatchCardParticipant) =>
   participant.player_display_name?.trim() ||
   participant.player_name?.trim() ||
@@ -71,6 +73,18 @@ const formatEloDiff = (eloDiff: number) =>
 const getStocksLost = (participant: MatchCardParticipant) =>
   participant.total_falls + participant.total_sds;
 
+const isLoserDefeatSupported = (
+  winner: MatchCardParticipant,
+  loser: MatchCardParticipant
+) =>
+  getStocksLost(loser) >= STARTING_STOCKS ||
+  winner.total_kos >= STARTING_STOCKS;
+
+const doesOpponentVetoStockBadge = (
+  claimedWinnerStocksLost: number,
+  opponent: MatchCardParticipant
+) => opponent.total_kos > claimedWinnerStocksLost;
+
 const getWinnerStockBadge = (
   participants: MatchCardParticipant[]
 ): WinnerStockBadge | null => {
@@ -86,13 +100,15 @@ const getWinnerStockBadge = (
   }
 
   const winnerStocksLost = getStocksLost(winner);
-  const loserStocksLost = getStocksLost(loser);
 
-  if (loserStocksLost < 3) {
+  if (
+    !isLoserDefeatSupported(winner, loser) ||
+    doesOpponentVetoStockBadge(winnerStocksLost, loser)
+  ) {
     return null;
   }
 
-  const winnerStocksRemaining = 3 - winnerStocksLost;
+  const winnerStocksRemaining = STARTING_STOCKS - winnerStocksLost;
 
   if (winnerStocksRemaining === 3) {
     return { playerId: winner.player, label: "3-stock", variant: "gold" };
