@@ -199,6 +199,10 @@ interface RankingQueryState {
 
 const MATCHES_PAGE_SIZE = 20;
 const MATCH_CONTEXT_PAGE_SIZE = 2;
+const MATCH_GAP_THRESHOLD_MS = 10 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 const CHARACTER_RANKINGS_BATCH_SIZE = 50;
 const CHARACTER_RANKING_MIN_MATCHES = 5;
 const DEFAULT_CHARACTER_RANKING_PLAYER_ROW_LIMIT = 3;
@@ -357,6 +361,61 @@ const getMatchDateFilterError = getDateRangeFilterError;
 const getMatchDateRangeLabel = (startDate: string, endDate: string) =>
   getOpenDateRangeLabel(startDate, endDate, "All Dates");
 
+const pluralizeDurationUnit = (value: number, unit: string) =>
+  `${value} ${unit}${value === 1 ? "" : "s"}`;
+
+const formatMatchGapDuration = (gapMs: number) => {
+  const totalMinutes = Math.max(1, Math.ceil(gapMs / MINUTE_MS));
+
+  if (gapMs < HOUR_MS) {
+    return pluralizeDurationUnit(totalMinutes, "minute");
+  }
+
+  const totalHours = Math.floor(totalMinutes / (HOUR_MS / MINUTE_MS));
+  const remainingMinutes = totalMinutes % (HOUR_MS / MINUTE_MS);
+
+  if (gapMs < DAY_MS) {
+    return [
+      pluralizeDurationUnit(totalHours, "hour"),
+      remainingMinutes > 0
+        ? pluralizeDurationUnit(remainingMinutes, "minute")
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  const days = Math.floor(totalHours / (DAY_MS / HOUR_MS));
+  const remainingHours = totalHours % (DAY_MS / HOUR_MS);
+
+  return [
+    pluralizeDurationUnit(days, "day"),
+    remainingHours > 0 ? pluralizeDurationUnit(remainingHours, "hour") : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const getMatchGapDurationLabel = (
+  newerMatch: Match,
+  olderMatch: Match
+): string | null => {
+  const newerTimestamp = new Date(newerMatch.created_at).getTime();
+  const olderTimestamp = new Date(olderMatch.created_at).getTime();
+
+  if (!Number.isFinite(newerTimestamp) || !Number.isFinite(olderTimestamp)) {
+    return null;
+  }
+
+  const gapMs = newerTimestamp - olderTimestamp;
+
+  if (gapMs <= MATCH_GAP_THRESHOLD_MS) {
+    return null;
+  }
+
+  return formatMatchGapDuration(gapMs);
+};
+
 // Memoized component for refresh status to prevent unnecessary rerendersO
 const RefreshStatus = memo(
   ({
@@ -431,6 +490,28 @@ const HardRefreshButton = memo(
 );
 
 HardRefreshButton.displayName = "HardRefreshButton";
+
+const MatchGapSeparator = memo(
+  ({ durationLabel }: { durationLabel: string }) => (
+    <div
+      role="separator"
+      aria-label={`No matches for ${durationLabel}`}
+      className="relative min-h-11 overflow-hidden rounded-xl border border-gray-700 bg-gray-900/75 px-4 py-3"
+      style={{
+        backgroundImage:
+          "repeating-linear-gradient(135deg, rgba(148, 163, 184, 0.2) 0px, rgba(148, 163, 184, 0.2) 1px, transparent 1px, transparent 8px)",
+      }}
+    >
+      <div className="relative flex items-center justify-center">
+        <span className="rounded-md border border-gray-700 bg-gray-950/95 px-3 py-1 text-xs font-semibold text-gray-300 shadow-sm">
+          no matches for {durationLabel}
+        </span>
+      </div>
+    </div>
+  )
+);
+
+MatchGapSeparator.displayName = "MatchGapSeparator";
 
 // ProfilePicture component with zoom and translate effects
 const ProfilePicture = memo(
@@ -5837,14 +5918,18 @@ export default function SmashTournamentELO({
                             )}
 
                             <div className="space-y-4">
-                              {matches.map((match) => {
+                              {matches.map((match, index) => {
+                                const nextMatch = matches[index + 1];
+                                const matchGapDurationLabel = nextMatch
+                                  ? getMatchGapDurationLabel(match, nextMatch)
+                                  : null;
                                 const playerIds = match.participants.map((participant) =>
                                   participant.player.toString()
                                 );
 
-                                return (
+                                return [
                                   <MatchCard
-                                    key={match.id}
+                                    key={`match-${match.id}`}
                                     match={match}
                                     players={players}
                                     showUtcTime={showUtcTime}
@@ -5992,8 +6077,14 @@ export default function SmashTournamentELO({
                                         </button>
                                       </>
                                     }
-                                  />
-                                );
+                                  />,
+                                  matchGapDurationLabel ? (
+                                    <MatchGapSeparator
+                                      key={`gap-${match.id}-${nextMatch?.id}`}
+                                      durationLabel={matchGapDurationLabel}
+                                    />
+                                  ) : null,
+                                ];
                               })}
                             </div>
 
