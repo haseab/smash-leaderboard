@@ -6,7 +6,7 @@ import React from "react";
 export interface MatchCardParticipant {
   id: number;
   player: number;
-  player_name: string;
+  player_name: string | null;
   player_display_name: string | null;
   smash_character: string;
   elo_diff?: number | null;
@@ -44,13 +44,26 @@ type WinnerStockBadge = {
   variant: "gold" | "silver";
 };
 
-const getInitials = (name: string) =>
-  name
+const getParticipantDisplayName = (participant: MatchCardParticipant) =>
+  participant.player_display_name?.trim() ||
+  participant.player_name?.trim() ||
+  `Player ${participant.player}`;
+
+const getInitials = (name: string | null | undefined) => {
+  const normalizedName = name?.trim();
+
+  if (!normalizedName) {
+    return "?";
+  }
+
+  return normalizedName
     .split(" ")
+    .filter(Boolean)
     .map((segment) => segment[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+};
 
 const formatEloDiff = (eloDiff: number) =>
   `${eloDiff > 0 ? "+" : ""}${eloDiff} ELO`;
@@ -111,7 +124,7 @@ function MatchPlayerAvatar({
   participant: MatchCardParticipant;
   picture?: string | null;
 }) {
-  const displayName = participant.player_display_name || participant.player_name;
+  const displayName = getParticipantDisplayName(participant);
   const accentClasses = participant.has_won
     ? "border-green-400 bg-green-600"
     : "border-red-400 bg-red-600";
@@ -244,7 +257,7 @@ export default function MatchCard({
                       onClick={() => onPlayerClick(participant.player)}
                       className="truncate text-left font-semibold text-white transition-colors hover:text-yellow-400"
                     >
-                      {participant.player_display_name || participant.player_name}
+                      {getParticipantDisplayName(participant)}
                     </button>
                     <div
                       className={`flex items-center gap-2 text-sm font-medium ${getCharacterTextClasses(

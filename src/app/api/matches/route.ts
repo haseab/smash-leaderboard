@@ -68,7 +68,10 @@ const transformMatches = (matches: MatchWithParticipants[]) =>
     participants: match.match_participants.map((participant) => ({
       id: Number(participant.id),
       player: Number(participant.player),
-      player_name: participant.players.name,
+      player_name:
+        participant.players.name ||
+        participant.players.display_name ||
+        `Player ${Number(participant.player)}`,
       player_display_name: participant.players.display_name,
       smash_character: getCanonicalCharacterName(participant.smash_character),
       elo_diff: participant.elo_diff,

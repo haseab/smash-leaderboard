@@ -134,7 +134,7 @@ type TierListEntry = {
 interface MatchParticipant {
   id: number;
   player: number;
-  player_name: string;
+  player_name: string | null;
   player_display_name: string | null;
   smash_character: string;
   elo_diff?: number | null;
