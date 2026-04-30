@@ -33,7 +33,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { memo, useEffect, useRef, useState } from "react";
 import ReactCountryFlag from "react-country-flag";
 import CharacterDropdown from "./CharacterDropdown";
@@ -1085,6 +1085,7 @@ CharacterRankingSearchPanel.displayName = "CharacterRankingSearchPanel";
 export default function SmashTournamentELO({
   defaultTab = "rankings",
 }: SmashTournamentELOProps) {
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const isCharacterBasedQueryPage =
@@ -1142,9 +1143,8 @@ export default function SmashTournamentELO({
   );
   const [teamRankings, setTeamRankings] = useState<TeamRanking[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [activeTab] = useState<
-    "tiers" | "rankings" | "matchups" | "matches" | "players"
-  >(defaultTab);
+  const activeTab: "tiers" | "rankings" | "matchups" | "matches" | "players" =
+    defaultTab;
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingCharacterRankings, setLoadingCharacterRankings] =
     useState<boolean>(false);
@@ -2483,7 +2483,11 @@ export default function SmashTournamentELO({
   };
 
   useEffect(() => {
-    if (defaultTab !== "players" || players.length === 0) {
+    if (
+      defaultTab !== "players" ||
+      pathname !== "/players" ||
+      players.length === 0
+    ) {
       return;
     }
 
@@ -2526,10 +2530,10 @@ export default function SmashTournamentELO({
     return () => {
       abortController.abort();
     };
-  }, [defaultTab, players.length, lastUpdated]);
+  }, [defaultTab, pathname, players.length, lastUpdated]);
 
   useEffect(() => {
-    if (defaultTab !== "players") {
+    if (defaultTab !== "players" || pathname !== "/players") {
       return;
     }
 
@@ -2592,6 +2596,7 @@ export default function SmashTournamentELO({
     };
   }, [
     defaultTab,
+    pathname,
     playerEloRanges,
     eloDetailHistories,
   ]);
