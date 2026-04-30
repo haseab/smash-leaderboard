@@ -112,6 +112,7 @@ const specialMappings: Record<string, string> = {
   "KING K. ROOL": "KING K. ROOL",
   ROSALINA: "ROSALINA & LUMA",
   "ROSALINA & LUMA": "ROSALINA & LUMA",
+  "POKEMON TRAINER": "POKEMON TRAINER",
   PYRA: "PYRA/MYTHRA",
   MYTHRA: "PYRA/MYTHRA",
   "PYRA/MYTHRA": "PYRA/MYTHRA",
@@ -122,6 +123,7 @@ const canonicalDisplayMappings: Record<string, string> = {
   STEVE: "Steve",
   "KING K. ROOL": "King K. Rool",
   "ROSALINA & LUMA": "Rosalina & Luma",
+  "POKEMON TRAINER": "POK\u00c9MON TRAINER",
   "PYRA/MYTHRA": "Pyra/Mythra",
 };
 
@@ -129,8 +131,12 @@ const characterAliasQueryValues: Record<string, string[]> = {
   STEVE: ["Steve", "Alex", "Enderman", "Zombie"],
   "KING K. ROOL": ["King K. Rool", "King K Rool"],
   "ROSALINA & LUMA": ["Rosalina & Luma", "Rosalina"],
+  "POKEMON TRAINER": ["Pokemon Trainer", "POKEMON TRAINER", "POK\u00c9MON TRAINER"],
   "PYRA/MYTHRA": ["Pyra/Mythra", "Pyra", "Mythra"],
 };
+
+const stripDiacritics = (value: string) =>
+  value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 export function getCharacterIcon(characterName: string): string {
   const normalizedName = normalizeCharacterName(characterName);
@@ -181,8 +187,10 @@ export function expandCharacterAliasQueryValues(characterName: string): string[]
 export function normalizeCharacterName(characterName: string): string {
   if (!characterName) return "";
 
+  const normalizedInput = stripDiacritics(characterName.trim());
+
   // Convert to uppercase for lookup
-  const upperCase = characterName
+  const upperCase = normalizedInput
     .toLowerCase()
     .split(" ")
     .map((word) => {
