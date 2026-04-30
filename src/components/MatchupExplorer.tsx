@@ -6,6 +6,7 @@ import MatchCard, { MatchCardMatch } from "@/components/MatchCard";
 import MatchOutcomeFilters from "@/components/MatchOutcomeFilters";
 import PlayerDropdown from "@/components/PlayerDropdown";
 import {
+  appendLocalDateRangeBounds,
   formatDateInputValue,
   formatDateValue,
   shiftDateByDays,
@@ -977,6 +978,7 @@ export default function MatchupExplorer({
         if (timeRange === "custom") {
           params.set("startDate", startDate);
           params.set("endDate", endDate);
+          appendLocalDateRangeBounds(params, startDate, endDate);
         }
         if (recentMatchResultFilter !== "all") {
           params.set("recentResult", recentMatchResultFilter);

@@ -1,4 +1,4 @@
-import { addUtcDays, parseUtcDate } from "@/lib/dateRange";
+import { getDateRangeSearchParamBounds } from "@/lib/dateRange";
 import { prisma } from "@/lib/prisma";
 import { normalizeAppUrl } from "@/lib/site-url";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
@@ -53,7 +53,7 @@ interface TransformedPlayer {
 
 async function fetchPlayersFromDb(
   startDate: Date | null = null,
-  endDate: Date | null = null
+  endDateExclusive: Date | null = null
 ): Promise<TransformedPlayer[]> {
   const queryParams: Date[] = [];
   const oneVOneMatchDateFilters: string[] = [];
@@ -65,8 +65,8 @@ async function fetchPlayersFromDb(
     );
   }
 
-  if (endDate) {
-    queryParams.push(addUtcDays(endDate, 1));
+  if (endDateExclusive) {
+    queryParams.push(endDateExclusive);
     oneVOneMatchDateFilters.push(
       `      AND vm.created_at < $${queryParams.length}`
     );
@@ -265,26 +265,28 @@ const getCachedPlayers = unstable_cache(
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const startDateInput = searchParams.get("startDate");
-    const endDateInput = searchParams.get("endDate");
-    const startDate = parseUtcDate(startDateInput);
-    const endDate = parseUtcDate(endDateInput);
+    const {
+      startDate,
+      endDateExclusive,
+      hasInvalidDateInput,
+      hasInvertedDateRange,
+    } = getDateRangeSearchParamBounds(searchParams);
 
-    if ((startDateInput && !startDate) || (endDateInput && !endDate)) {
+    if (hasInvalidDateInput) {
       return NextResponse.json(
         { error: "Invalid date filter" },
         { status: 400 }
       );
     }
 
-    if (startDate && endDate && startDate > endDate) {
+    if (hasInvertedDateRange) {
       return NextResponse.json(
         { error: "Start date must be on or before the end date" },
         { status: 400 }
       );
     }
 
-    const hasDateFilter = Boolean(startDate || endDate);
+    const hasDateFilter = Boolean(startDate || endDateExclusive);
 
     console.log(
       hasDateFilter
@@ -293,7 +295,7 @@ export async function GET(request: Request) {
     );
 
     const players = hasDateFilter
-      ? await fetchPlayersFromDb(startDate, endDate)
+      ? await fetchPlayersFromDb(startDate, endDateExclusive)
       : await getCachedPlayers();
 
     console.log(

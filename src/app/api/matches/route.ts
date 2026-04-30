@@ -3,6 +3,7 @@ import {
   parseMatchResultFilter,
   parseMatchStockFilter,
 } from "@/lib/matchOutcomeFilters";
+import { getDateRangeSearchParamBounds } from "@/lib/dateRange";
 import { resolvePlayersByQueryValues } from "@/lib/server/playerQueryResolver";
 import {
   expandCharacterAliasQueryValues,
@@ -33,29 +34,6 @@ const MATCH_ORDER_BY_ASC: Prisma.matchesOrderByWithRelationInput[] = [
   { created_at: "asc" },
   { id: "asc" },
 ];
-
-const isValidDateInput = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
-
-const parseUtcDate = (value: string | null) => {
-  if (!value || !isValidDateInput(value)) {
-    return null;
-  }
-
-  const [year, month, day] = value.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed;
-};
-
-const addDays = (date: Date, days: number) => {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-};
 
 type MatchWithParticipants = Prisma.matchesGetPayload<{
   include: typeof MATCH_INCLUDE;
@@ -288,19 +266,24 @@ const getStockFilteredMatchIds = async (stockRemaining: number) =>
       ) = 1
       AND EXISTS (
         SELECT 1
-        FROM match_participants mp_loser
-        WHERE mp_loser.match_id = m.id
-          AND mp_loser.is_cpu = false
-          AND mp_loser.has_won = false
-          AND (mp_loser.total_falls + mp_loser.total_sds) >= 3
-      )
-      AND EXISTS (
-        SELECT 1
         FROM match_participants mp_winner
+        JOIN match_participants mp_loser
+          ON mp_loser.match_id = mp_winner.match_id
+         AND mp_loser.is_cpu = false
+         AND mp_loser.has_won = false
         WHERE mp_winner.match_id = m.id
           AND mp_winner.is_cpu = false
           AND mp_winner.has_won = true
-          AND (3 - (mp_winner.total_falls + mp_winner.total_sds)) = ${stockRemaining}
+          AND GREATEST(
+            mp_loser.total_falls + mp_loser.total_sds,
+            mp_winner.total_kos
+          ) >= 3
+          AND (
+            3 - GREATEST(
+              mp_winner.total_falls + mp_winner.total_sds,
+              mp_loser.total_kos
+            )
+          ) = ${stockRemaining}
       )
   `);
 
@@ -329,8 +312,12 @@ export async function GET(request: Request) {
     const cursorMatchIdParam = searchParams.get("cursorMatchId");
     const startDateInput = searchParams.get("startDate");
     const endDateInput = searchParams.get("endDate");
-    const startDate = parseUtcDate(startDateInput);
-    const endDate = parseUtcDate(endDateInput);
+    const {
+      startDate,
+      endDateExclusive,
+      hasInvalidDateInput,
+      hasInvertedDateRange,
+    } = getDateRangeSearchParamBounds(searchParams);
     const resultFilter = parseMatchResultFilter(searchParams.get("result"));
     const stockFilter = parseMatchStockFilter(searchParams.get("stock"));
     const contextLimit = parsePositiveInt(
@@ -339,14 +326,14 @@ export async function GET(request: Request) {
       20
     );
 
-    if ((startDateInput && !startDate) || (endDateInput && !endDate)) {
+    if (hasInvalidDateInput) {
       return NextResponse.json(
         { error: "Invalid date filter" },
         { status: 400 }
       );
     }
 
-    if (startDate && endDate && startDate > endDate) {
+    if (hasInvertedDateRange) {
       return NextResponse.json(
         { error: "Start date must be on or before the end date" },
         { status: 400 }
@@ -435,11 +422,11 @@ export async function GET(request: Request) {
       },
     ];
 
-    if (startDate || endDate) {
+    if (startDate || endDateExclusive) {
       whereConditions.push({
         created_at: {
           ...(startDate ? { gte: startDate } : {}),
-          ...(endDate ? { lt: addDays(endDate, 1) } : {}),
+          ...(endDateExclusive ? { lt: endDateExclusive } : {}),
         },
       });
     }

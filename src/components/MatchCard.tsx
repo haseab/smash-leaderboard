@@ -1,6 +1,7 @@
 "use client";
 
 import CharacterProfilePicture from "@/components/CharacterProfilePicture";
+import { getMatchWinnerStocksRemaining } from "@/lib/matchOutcomeFilters";
 import React from "react";
 
 export interface MatchCardParticipant {
@@ -44,8 +45,6 @@ type WinnerStockBadge = {
   variant: "gold" | "silver";
 };
 
-const STARTING_STOCKS = 3;
-
 const getParticipantDisplayName = (participant: MatchCardParticipant) =>
   participant.player_display_name?.trim() ||
   participant.player_name?.trim() ||
@@ -70,21 +69,6 @@ const getInitials = (name: string | null | undefined) => {
 const formatEloDiff = (eloDiff: number) =>
   `${eloDiff > 0 ? "+" : ""}${eloDiff} ELO`;
 
-const getStocksLost = (participant: MatchCardParticipant) =>
-  participant.total_falls + participant.total_sds;
-
-const isLoserDefeatSupported = (
-  winner: MatchCardParticipant,
-  loser: MatchCardParticipant
-) =>
-  getStocksLost(loser) >= STARTING_STOCKS ||
-  winner.total_kos >= STARTING_STOCKS;
-
-const doesOpponentVetoStockBadge = (
-  claimedWinnerStocksLost: number,
-  opponent: MatchCardParticipant
-) => opponent.total_kos > claimedWinnerStocksLost;
-
 const getWinnerStockBadge = (
   participants: MatchCardParticipant[]
 ): WinnerStockBadge | null => {
@@ -93,22 +77,16 @@ const getWinnerStockBadge = (
   }
 
   const winner = participants.find((participant) => participant.has_won);
-  const loser = participants.find((participant) => !participant.has_won);
 
-  if (!winner || !loser) {
+  if (!winner) {
     return null;
   }
 
-  const winnerStocksLost = getStocksLost(winner);
+  const winnerStocksRemaining = getMatchWinnerStocksRemaining(participants);
 
-  if (
-    !isLoserDefeatSupported(winner, loser) ||
-    doesOpponentVetoStockBadge(winnerStocksLost, loser)
-  ) {
+  if (winnerStocksRemaining === null) {
     return null;
   }
-
-  const winnerStocksRemaining = STARTING_STOCKS - winnerStocksLost;
 
   if (winnerStocksRemaining === 3) {
     return { playerId: winner.player, label: "3-stock", variant: "gold" };

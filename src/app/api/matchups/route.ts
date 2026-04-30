@@ -1,5 +1,6 @@
 import { resolvePlayerPairByQueryValues } from "@/lib/server/playerQueryResolver";
 import { prisma } from "@/lib/prisma";
+import { getDateRangeSearchParamBounds } from "@/lib/dateRange";
 import {
   parseMatchResultFilter,
   parseMatchStockFilter,
@@ -84,29 +85,6 @@ const parseCanonicalCharacterArray = (values: string[]) =>
       values.map((value) => getCanonicalCharacterName(value)).filter(Boolean)
     )
   ).sort((a, b) => a.localeCompare(b));
-
-const isValidDateInput = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
-
-const parseUtcDate = (value: string | null) => {
-  if (!value || !isValidDateInput(value)) {
-    return null;
-  }
-
-  const [year, month, day] = value.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed;
-};
-
-const addDays = (date: Date, days: number) => {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-};
 
 const subtractDays = (date: Date, days: number) => {
   const next = new Date(date);
@@ -307,8 +285,6 @@ export async function GET(request: Request) {
         )
     );
     const timeRange = parseTimeRange(searchParams.get("timeRange"));
-    const startDateInput = searchParams.get("startDate");
-    const endDateInput = searchParams.get("endDate");
     const recentResultFilter = parseMatchResultFilter(
       searchParams.get("recentResult")
     );
@@ -341,17 +317,21 @@ export async function GET(request: Request) {
     } else if (timeRange === "1y") {
       rangeStart = subtractYears(now, 1);
     } else if (timeRange === "custom") {
-      const startDate = parseUtcDate(startDateInput);
-      const endDate = parseUtcDate(endDateInput);
+      const {
+        startDate,
+        endDateExclusive,
+        hasInvalidDateInput,
+        hasInvertedDateRange,
+      } = getDateRangeSearchParamBounds(searchParams);
 
-      if (!startDate || !endDate) {
+      if (!startDate || !endDateExclusive || hasInvalidDateInput) {
         return NextResponse.json(
           { error: "A valid custom start and end date are required." },
           { status: 400 }
         );
       }
 
-      if (startDate > endDate) {
+      if (hasInvertedDateRange) {
         return NextResponse.json(
           { error: "Custom start date must be on or before the end date." },
           { status: 400 }
@@ -359,7 +339,7 @@ export async function GET(request: Request) {
       }
 
       rangeStart = startDate;
-      rangeEndExclusive = addDays(endDate, 1);
+      rangeEndExclusive = endDateExclusive;
     }
 
     const rangeStartFilter = rangeStart
@@ -413,17 +393,29 @@ export async function GET(request: Request) {
       recentStockFilter !== "all"
         ? Prisma.sql`
             AND (
-              CASE
-                WHEN h.player_one_has_won
-                  THEN 3 - (h.player_one_falls + h.player_one_sds)
-                ELSE 3 - (h.player_two_falls + h.player_two_sds)
-              END
+              3 - GREATEST(
+                CASE
+                  WHEN h.player_one_has_won
+                    THEN h.player_one_falls + h.player_one_sds
+                  ELSE h.player_two_falls + h.player_two_sds
+                END,
+                CASE
+                  WHEN h.player_one_has_won
+                    THEN h.player_two_kos
+                  ELSE h.player_one_kos
+                END
+              )
             ) = ${Number(recentStockFilter)}
-            AND (
+            AND GREATEST(
               CASE
                 WHEN h.player_one_has_won
                   THEN h.player_two_falls + h.player_two_sds
                 ELSE h.player_one_falls + h.player_one_sds
+              END,
+              CASE
+                WHEN h.player_one_has_won
+                  THEN h.player_one_kos
+                ELSE h.player_two_kos
               END
             ) >= 3
           `
@@ -559,14 +551,14 @@ export async function GET(request: Request) {
             'threeStocks',
             COUNT(*) FILTER (
               WHERE player_one_has_won
-                AND player_one_falls + player_one_sds = 0
-                AND player_two_falls + player_two_sds >= 3
+                AND GREATEST(player_one_falls + player_one_sds, player_two_kos) = 0
+                AND GREATEST(player_two_falls + player_two_sds, player_one_kos) >= 3
             )::int,
             'twoStocks',
             COUNT(*) FILTER (
               WHERE player_one_has_won
-                AND player_one_falls + player_one_sds = 1
-                AND player_two_falls + player_two_sds >= 3
+                AND GREATEST(player_one_falls + player_one_sds, player_two_kos) = 1
+                AND GREATEST(player_two_falls + player_two_sds, player_one_kos) >= 3
             )::int
           ) AS player1_stats,
           json_build_object(
@@ -585,14 +577,14 @@ export async function GET(request: Request) {
             'threeStocks',
             COUNT(*) FILTER (
               WHERE player_two_has_won
-                AND player_two_falls + player_two_sds = 0
-                AND player_one_falls + player_one_sds >= 3
+                AND GREATEST(player_two_falls + player_two_sds, player_one_kos) = 0
+                AND GREATEST(player_one_falls + player_one_sds, player_two_kos) >= 3
             )::int,
             'twoStocks',
             COUNT(*) FILTER (
               WHERE player_two_has_won
-                AND player_two_falls + player_two_sds = 1
-                AND player_one_falls + player_one_sds >= 3
+                AND GREATEST(player_two_falls + player_two_sds, player_one_kos) = 1
+                AND GREATEST(player_one_falls + player_one_sds, player_two_kos) >= 3
             )::int
           ) AS player2_stats
         FROM filtered_matches

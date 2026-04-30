@@ -7,6 +7,7 @@ import {
   serializePlayerIdsToQueryValues,
 } from "@/lib/playerQuery";
 import {
+  appendLocalDateRangeBounds,
   getDateRangeFilterError,
   getOpenDateRangeLabel,
   getValidDateQueryValue,
@@ -2397,6 +2398,7 @@ export default function SmashTournamentELO({
       const params = new URLSearchParams();
       if (startDateFilter) params.set("startDate", startDateFilter);
       if (endDateFilter) params.set("endDate", endDateFilter);
+      appendLocalDateRangeBounds(params, startDateFilter, endDateFilter);
       const queryString = params.toString();
       const response = await fetch(
         queryString ? `/api/players?${queryString}` : "/api/players",
@@ -2827,6 +2829,8 @@ export default function SmashTournamentELO({
       if (endDateFilter) {
         params.append("endDate", endDateFilter);
       }
+
+      appendLocalDateRangeBounds(params, startDateFilter, endDateFilter);
     }
 
     if (outcomeFilters.result !== "all" && playerFilter.length > 0) {

@@ -12,6 +12,7 @@ export interface MatchOutcomeFilterState {
 export interface MatchOutcomeFilterParticipant {
   player: number;
   is_cpu?: boolean;
+  total_kos: number;
   total_falls: number;
   total_sds: number;
   has_won: boolean;
@@ -62,8 +63,15 @@ export const getActiveMatchOutcomeFilterCount = (
   filters: MatchOutcomeFilterState
 ) => [filters.result !== "all", filters.stock !== "all"].filter(Boolean).length;
 
-const getStocksLost = (participant: MatchOutcomeFilterParticipant) =>
+export const STARTING_STOCKS = 3;
+
+export const getStocksLost = (participant: MatchOutcomeFilterParticipant) =>
   participant.total_falls + participant.total_sds;
+
+export const getEffectiveStocksLost = (
+  participant: MatchOutcomeFilterParticipant,
+  opponent: MatchOutcomeFilterParticipant
+) => Math.max(getStocksLost(participant), opponent.total_kos ?? 0);
 
 export const getMatchWinnerStocksRemaining = (
   participants: MatchOutcomeFilterParticipant[]
@@ -79,13 +87,18 @@ export const getMatchWinnerStocksRemaining = (
   const winner = playerParticipants.find((participant) => participant.has_won);
   const loser = playerParticipants.find((participant) => !participant.has_won);
 
-  if (!winner || !loser || getStocksLost(loser) < 3) {
+  if (
+    !winner ||
+    !loser ||
+    getEffectiveStocksLost(loser, winner) < STARTING_STOCKS
+  ) {
     return null;
   }
 
-  const stocksRemaining = 3 - getStocksLost(winner);
+  const stocksRemaining =
+    STARTING_STOCKS - getEffectiveStocksLost(winner, loser);
 
-  return stocksRemaining >= 1 && stocksRemaining <= 3
+  return stocksRemaining >= 1 && stocksRemaining <= STARTING_STOCKS
     ? stocksRemaining
     : null;
 };
