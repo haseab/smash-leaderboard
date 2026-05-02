@@ -120,11 +120,11 @@ const specialMappings: Record<string, string> = {
 };
 
 const canonicalDisplayMappings: Record<string, string> = {
-  STEVE: "Steve",
-  "KING K. ROOL": "King K. Rool",
-  "ROSALINA & LUMA": "Rosalina & Luma",
+  STEVE: "STEVE",
+  "KING K. ROOL": "KING K. ROOL",
+  "ROSALINA & LUMA": "ROSALINA & LUMA",
   "POKEMON TRAINER": "POK\u00c9MON TRAINER",
-  "PYRA/MYTHRA": "Pyra/Mythra",
+  "PYRA/MYTHRA": "PYRA/MYTHRA",
 };
 
 const characterAliasQueryValues: Record<string, string[]> = {
