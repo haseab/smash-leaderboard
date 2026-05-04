@@ -199,6 +199,7 @@ interface RankingQueryState {
 
 const MATCHES_PAGE_SIZE = 20;
 const MATCH_CONTEXT_PAGE_SIZE = 2;
+const AUTO_REFRESH_INTERVAL_MS = 1000;
 const MATCH_GAP_THRESHOLD_MS = 10 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -420,13 +421,11 @@ const getMatchGapDurationLabel = (
 const RefreshStatus = memo(
   ({
     refreshing,
-    countdown,
     lastUpdated,
     centered = false,
     autoRefreshDisabled = false,
   }: {
     refreshing: boolean;
-    countdown: number;
     lastUpdated: Date | null;
     centered?: boolean;
     autoRefreshDisabled?: boolean;
@@ -454,7 +453,7 @@ const RefreshStatus = memo(
             {/* <span>Last updated: {lastUpdated.toLocaleTimeString()}</span> */}
             {/* <span className="mx-2 text-gray-400">•</span> */}
             <PingDot color="green" className="mr-2" />
-            <span>Refreshing in {countdown}s</span>
+            <span>Live updates</span>
           </>
         )}
       </div>
@@ -1238,13 +1237,7 @@ export default function SmashTournamentELO({
     useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [refreshingCharacterRankings, setRefreshingCharacterRankings] =
-    useState<boolean>(false);
-  const [refreshingTeamRankings, setRefreshingTeamRankings] =
-    useState<boolean>(false);
   const [hardRefreshing, setHardRefreshing] = useState<boolean>(false);
-  const [countdown, setCountdown] = useState<number>(30);
 
   // Cache management
   const [playersCache, setPlayersCache] = useState<{
@@ -1476,6 +1469,7 @@ export default function SmashTournamentELO({
   const currentLeaderboardTab = useRef<string>("overall");
   const currentOverallRankingsView =
     useRef<OverallRankingsView>("all-characters");
+  const autoRefreshInFlight = useRef<boolean>(false);
 
   // Update refs when state changes
   useEffect(() => {
@@ -1896,11 +1890,7 @@ export default function SmashTournamentELO({
     currentLeaderboard: LeaderboardTab
   ) => tab === "rankings" && currentLeaderboard === "teams";
 
-  const isRefreshing =
-    refreshing ||
-    refreshingCharacterRankings ||
-    refreshingTeamRankings ||
-    hardRefreshing;
+  const isRefreshing = hardRefreshing;
 
   const clearPlayersCache = () => {
     setPlayersCache(null);
@@ -1936,7 +1926,6 @@ export default function SmashTournamentELO({
 
     clearPlayersCache();
     setError(null);
-    setCountdown(30);
     setHardRefreshing(true);
     setEloSparklines({});
     setEloDetailHistories({});
@@ -2369,40 +2358,48 @@ export default function SmashTournamentELO({
       }
     }
 
-    // Set up automatic refresh every 30 seconds - but only run for current active tab
+    // Poll quickly; server-side caches absorb repeated reads until revalidated.
     const refreshInterval = setInterval(() => {
-      // Only refresh if this component is for the current active tab
-      if (currentActiveTab.current === defaultTab) {
-        // For matches tab, only refresh if auto-refresh is not disabled
-        if (defaultTab === "matches" && currentAutoRefreshDisabled.current) {
-          // Skip all refresh activity when auto-refresh is disabled for matches
-          return;
-        }
+      if (
+        currentActiveTab.current !== defaultTab ||
+        autoRefreshInFlight.current ||
+        (defaultTab === "matches" && currentAutoRefreshDisabled.current)
+      ) {
+        return;
+      }
 
+      autoRefreshInFlight.current = true;
+
+      const refreshTasks: Array<Promise<unknown>> = [
         fetchPlayers(
           true,
-          false,
+          true,
           currentPlayerStartDateFilter.current,
           currentPlayerEndDateFilter.current
-        );
-        if (
-          shouldLoadCharacterRankings(
-            defaultTab,
-            currentLeaderboardTab.current as LeaderboardTab,
-            currentOverallRankingsView.current
-          )
-        ) {
-          fetchCharacterRankings(true);
-        }
-        if (
-          shouldLoadTeamRankings(
-            defaultTab,
-            currentLeaderboardTab.current as LeaderboardTab
-          )
-        ) {
-          fetchTeamRankings(true);
-        }
-        if (defaultTab === "matches") {
+        ),
+      ];
+
+      if (
+        shouldLoadCharacterRankings(
+          defaultTab,
+          currentLeaderboardTab.current as LeaderboardTab,
+          currentOverallRankingsView.current
+        )
+      ) {
+        refreshTasks.push(fetchCharacterRankings(true, true));
+      }
+
+      if (
+        shouldLoadTeamRankings(
+          defaultTab,
+          currentLeaderboardTab.current as LeaderboardTab
+        )
+      ) {
+        refreshTasks.push(fetchTeamRankings(true, true));
+      }
+
+      if (defaultTab === "matches") {
+        refreshTasks.push(
           fetchMatches(
             1,
             false,
@@ -2410,43 +2407,27 @@ export default function SmashTournamentELO({
             currentCharacterFilter.current,
             current1v1Filter.current,
             true,
-            false,
+            true,
             current2v2Filter.current,
             currentSameTeamFilter.current,
             currentTeamRankingFilter.current,
             currentMatchStartDateFilter.current,
             currentMatchEndDateFilter.current,
             currentMatchOutcomeFilters.current
-          );
-          setMatchesPage(1);
-        }
+          )
+        );
+        setMatchesPage(1);
       }
 
-      // Only update countdown if not in disabled state for matches tab
-      if (!(defaultTab === "matches" && currentAutoRefreshDisabled.current)) {
-        setCountdown(30);
-      }
-    }, 30000);
-
-    // Set up countdown timer every second
-    const countdownInterval = setInterval(() => {
-      // Don't update countdown if auto-refresh is disabled for matches tab
-      if (defaultTab === "matches" && currentAutoRefreshDisabled.current) {
-        return;
-      }
-
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          return 30;
-        }
-        return prev - 1;
+      void Promise.allSettled(refreshTasks).finally(() => {
+        autoRefreshInFlight.current = false;
       });
-    }, 1000);
+    }, AUTO_REFRESH_INTERVAL_MS);
 
     // Cleanup intervals on component unmount
     return () => {
+      autoRefreshInFlight.current = false;
       clearInterval(refreshInterval);
-      clearInterval(countdownInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultTab, searchParams]);
@@ -2462,16 +2443,12 @@ export default function SmashTournamentELO({
     if (getDateRangeFilterError(startDateFilter, endDateFilter)) {
       if (!isBackgroundRefresh) {
         setLoading(false);
-      } else {
-        setRefreshing(false);
       }
       return;
     }
 
     if (!isBackgroundRefresh) {
       setLoading(true);
-    } else {
-      setRefreshing(true);
     }
     setError(null);
 
@@ -2559,8 +2536,6 @@ export default function SmashTournamentELO({
     } finally {
       if (!isBackgroundRefresh) {
         setLoading(false);
-      } else {
-        setRefreshing(false);
       }
     }
   };
@@ -2690,8 +2665,6 @@ export default function SmashTournamentELO({
   ) => {
     if (!isBackgroundRefresh) {
       setLoadingCharacterRankings(true);
-    } else {
-      setRefreshingCharacterRankings(true);
     }
     setError(null);
 
@@ -2720,8 +2693,6 @@ export default function SmashTournamentELO({
       setHasFetchedCharacterRankings(true);
       if (!isBackgroundRefresh) {
         setLoadingCharacterRankings(false);
-      } else {
-        setRefreshingCharacterRankings(false);
       }
     }
   };
@@ -2732,8 +2703,6 @@ export default function SmashTournamentELO({
   ) => {
     if (!isBackgroundRefresh) {
       setLoadingTeamRankings(true);
-    } else {
-      setRefreshingTeamRankings(true);
     }
     setError(null);
 
@@ -2758,8 +2727,6 @@ export default function SmashTournamentELO({
       setHasFetchedTeamRankings(true);
       if (!isBackgroundRefresh) {
         setLoadingTeamRankings(false);
-      } else {
-        setRefreshingTeamRankings(false);
       }
     }
   };
@@ -3062,8 +3029,6 @@ export default function SmashTournamentELO({
 
     if (!isBackgroundRefresh) {
       setLoading(true);
-    } else {
-      setRefreshing(true);
     }
     setMatchSearchError(null);
     setAutoRefreshDisabled(true);
@@ -3114,8 +3079,6 @@ export default function SmashTournamentELO({
     } finally {
       if (!isBackgroundRefresh) {
         setLoading(false);
-      } else {
-        setRefreshing(false);
       }
     }
   };
@@ -4369,7 +4332,6 @@ export default function SmashTournamentELO({
                       <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                         <RefreshStatus
                           refreshing={isRefreshing}
-                          countdown={countdown}
                           lastUpdated={lastUpdated}
                           centered={false}
                         />
@@ -4598,11 +4560,7 @@ export default function SmashTournamentELO({
                       </p>
                     </div>
                   ) : (
-                    <div
-                      className={`p-6 transition-opacity duration-300 ${
-                        isRefreshing ? "opacity-75" : "opacity-100"
-                      }`}
-                    >
+                    <div className="p-6">
                       {isTeamLeaderboard ? (
                         <div>
                           {displayedTeamRankings.length > 0 &&
@@ -5218,7 +5176,6 @@ export default function SmashTournamentELO({
                             </div>
                             <RefreshStatus
                               refreshing={isRefreshing}
-                              countdown={countdown}
                               lastUpdated={lastUpdated}
                               centered={true}
                             />
@@ -5240,11 +5197,7 @@ export default function SmashTournamentELO({
                           ></div>
                         </div>
                       ) : (
-                        <div
-                          className={`p-6 transition-opacity duration-300 ${
-                            isRefreshing ? "opacity-75" : "opacity-100"
-                          }`}
-                        >
+                        <div className="p-6">
                         <div className="mb-6">
                           <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-900 p-1">
                             {tierListControlOptions.map((option) => (
@@ -5507,7 +5460,6 @@ export default function SmashTournamentELO({
                           <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                             <RefreshStatus
                               refreshing={isRefreshing}
-                              countdown={countdown}
                               lastUpdated={lastUpdated}
                               centered={false}
                             />
@@ -5587,7 +5539,6 @@ export default function SmashTournamentELO({
                           <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                             <RefreshStatus
                               refreshing={isRefreshing}
-                              countdown={countdown}
                               lastUpdated={lastUpdated}
                               centered={false}
                               autoRefreshDisabled={autoRefreshDisabled}
@@ -5600,11 +5551,7 @@ export default function SmashTournamentELO({
                         </div>
                       </div>
 
-                      <div
-                        className={`p-6 transition-opacity duration-300 ${
-                          isRefreshing ? "opacity-50" : "opacity-100"
-                        }`}
-                      >
+                      <div className="p-6">
                         {shouldShowMatchIdSearchBar && (
                           <div className="mb-6 rounded-xl border border-gray-700 bg-gray-800/90 p-4">
                             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
@@ -6156,18 +6103,6 @@ export default function SmashTournamentELO({
                     </div>
                   ) : (
                     <div className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-2xl border border-gray-700 shadow-lg relative">
-                      {/* Loading overlay when refreshing */}
-                      {refreshing && (
-                        <div className="absolute inset-0 bg-black bg-opacity-20 z-10 flex items-center justify-center backdrop-blur-sm rounded-2xl">
-                          <div className="bg-gray-800 bg-opacity-90 px-6 py-3 rounded-full flex items-center space-x-3 border border-gray-600">
-                            <div className="animate-spin h-5 w-5 border-2 border-yellow-500 border-t-transparent rounded-full"></div>
-                            <span className="text-white font-medium">
-                              Updating player profiles...
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
                       <div className="px-6 py-5 bg-gradient-to-r from-red-600 to-red-700 flex items-center justify-between relative overflow-hidden rounded-t-2xl">
                         {/* Glare effect */}
                         <div className="absolute inset-0 bg-gradient-to-br from-white to-transparent opacity-10 skew-x-12 transform -translate-x-full"></div>
@@ -6210,7 +6145,6 @@ export default function SmashTournamentELO({
                           <div className="mt-4 flex flex-col items-center gap-3 md:mt-0 md:items-end">
                             <RefreshStatus
                               refreshing={isRefreshing}
-                              countdown={countdown}
                               lastUpdated={lastUpdated}
                               centered={false}
                             />
@@ -6222,11 +6156,7 @@ export default function SmashTournamentELO({
                         </div>
                       </div>
 
-                      <div
-                        className={`p-6 transition-opacity duration-300 ${
-                          isRefreshing ? "opacity-75" : "opacity-100"
-                        }`}
-                      >
+                      <div className="p-6">
                         {showPlayerFilters && (
                           <div className="mb-6">
                             <DateRangeFilterBar
@@ -6238,7 +6168,6 @@ export default function SmashTournamentELO({
                               error={playerDateFilterError}
                               showClear={hasActivePlayerDateFilter}
                               onClear={clearPlayerDateFilters}
-                              loading={refreshing}
                               className="border-gray-700 bg-gray-800/40 shadow-none"
                             />
                           </div>
