@@ -41,6 +41,94 @@ interface TransformedCharacterRanking {
   last_match_date: string | null;
 }
 
+const compareCharacterRankings = (
+  a: TransformedCharacterRanking,
+  b: TransformedCharacterRanking
+) => {
+  if (b.elo !== a.elo) {
+    return b.elo - a.elo;
+  }
+
+  if (b.current_win_streak !== a.current_win_streak) {
+    return b.current_win_streak - a.current_win_streak;
+  }
+
+  if (b.total_wins !== a.total_wins) {
+    return b.total_wins - a.total_wins;
+  }
+
+  const aName = a.display_name || a.name;
+  const bName = b.display_name || b.name;
+  const nameComparison = aName.localeCompare(bName);
+
+  if (nameComparison !== 0) {
+    return nameComparison;
+  }
+
+  return a.character_name.localeCompare(b.character_name);
+};
+
+const getLatestDate = (left: string | null, right: string | null) => {
+  if (!left) {
+    return right;
+  }
+
+  if (!right) {
+    return left;
+  }
+
+  return new Date(left).getTime() >= new Date(right).getTime() ? left : right;
+};
+
+const mergeCanonicalCharacterRankings = (
+  rankings: TransformedCharacterRanking[]
+) => {
+  const rankingsByCanonicalKey = new Map<string, TransformedCharacterRanking>();
+
+  rankings.forEach((ranking) => {
+    const key = `${ranking.player_id}:${ranking.character_name}`;
+    const existingRanking = rankingsByCanonicalKey.get(key);
+
+    if (!existingRanking) {
+      rankingsByCanonicalKey.set(key, {
+        ...ranking,
+        id: `canonical:${key}`,
+      });
+      return;
+    }
+
+    const preferredRanking =
+      compareCharacterRankings(ranking, existingRanking) < 0
+        ? ranking
+        : existingRanking;
+    const totalWins = existingRanking.total_wins + ranking.total_wins;
+    const totalLosses = existingRanking.total_losses + ranking.total_losses;
+
+    rankingsByCanonicalKey.set(key, {
+      ...preferredRanking,
+      id: `canonical:${key}`,
+      total_wins: totalWins,
+      total_losses: totalLosses,
+      matches: totalWins + totalLosses,
+      total_kos: existingRanking.total_kos + ranking.total_kos,
+      total_falls: existingRanking.total_falls + ranking.total_falls,
+      total_sds: existingRanking.total_sds + ranking.total_sds,
+      current_win_streak: Math.max(
+        existingRanking.current_win_streak,
+        ranking.current_win_streak
+      ),
+      last_match_date: getLatestDate(
+        existingRanking.last_match_date,
+        ranking.last_match_date
+      ),
+    });
+  });
+
+  return Array.from(rankingsByCanonicalKey.values()).sort(
+    compareCharacterRankings
+  );
+};
+
 async function fetchCharacterRankingsFromDb(
   includeInactive: boolean
 ): Promise<TransformedCharacterRanking[]> {
@@ -77,7 +165,7 @@ async function fetchCharacterRankingsFromDb(
     query
   )) as CharacterRankingQueryResult[];
 
-  return result.map((characterRanking) => ({
+  const transformedRankings = result.map((characterRanking) => ({
     id: characterRanking.id.toString(),
     player_id: Number(characterRanking.player_id),
     name:
@@ -100,11 +188,13 @@ async function fetchCharacterRankingsFromDb(
       ? characterRanking.last_match_date.toISOString()
       : null,
   }));
+
+  return mergeCanonicalCharacterRankings(transformedRankings);
 }
 
 const getCachedCharacterRankings = unstable_cache(
   () => fetchCharacterRankingsFromDb(false),
-  ["character-rankings-data"],
+  ["character-rankings-data-v2"],
   {
     tags: ["players"],
   }
@@ -112,7 +202,7 @@ const getCachedCharacterRankings = unstable_cache(
 
 const getCachedCharacterRankingsIncludingInactive = unstable_cache(
   () => fetchCharacterRankingsFromDb(true),
-  ["character-rankings-data-including-inactive"],
+  ["character-rankings-data-including-inactive-v2"],
   {
     tags: ["players"],
   }
