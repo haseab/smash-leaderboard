@@ -757,6 +757,20 @@ export default function MatchupExplorer({
   const [recentMatchOutcomeFilters, setRecentMatchOutcomeFilters] =
     useState<MatchOutcomeFilterState>(DEFAULT_MATCH_OUTCOME_FILTERS);
   const [showUtcTime, setShowUtcTime] = useState(false);
+  const isMountedRef = useRef(false);
+  const recentMatchupsLoadedRef = useRef(false);
+  const recentMatchupsRefreshInFlightRef = useRef(false);
+  const matchupDataRef = useRef<MatchupApiResponse | null>(null);
+  const matchupRequestKeyRef = useRef("");
+  const matchupBackgroundRefreshInFlightRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const player1QueryValue = searchParams.get("player1") || "";
   const player2QueryValue = searchParams.get("player2") || "";
@@ -788,6 +802,22 @@ export default function MatchupExplorer({
   const selectedPlayer2 = findPlayerByQueryValue(player2QueryValue, players);
   const player1Id = selectedPlayer1 ? selectedPlayer1.id.toString() : "";
   const player2Id = selectedPlayer2 ? selectedPlayer2.id.toString() : "";
+  const matchupRequestKey = JSON.stringify([
+    player1QueryValue,
+    player2QueryValue,
+    player1Id,
+    player2Id,
+    player1Character,
+    player2Character,
+    player1ExcludedCharactersKey,
+    player2ExcludedCharactersKey,
+    timeRange,
+    startDate,
+    endDate,
+    recentMatchLimit,
+    recentMatchResultFilter,
+    recentMatchStockFilter,
+  ]);
 
   useEffect(() => {
     if (timeRange === "custom") {
@@ -818,16 +848,23 @@ export default function MatchupExplorer({
   ]);
 
   useEffect(() => {
-    const abortController = new AbortController();
+    if (recentMatchupsRefreshInFlightRef.current) {
+      return;
+    }
+
+    const isInitialLoad = !recentMatchupsLoadedRef.current;
 
     const loadRecentMatchups = async () => {
-      setRecentMatchupsLoading(true);
-      setRecentMatchupsError(null);
+      recentMatchupsRefreshInFlightRef.current = true;
+
+      if (isInitialLoad) {
+        setRecentMatchupsLoading(true);
+        setRecentMatchupsError(null);
+      }
 
       try {
         const response = await fetch("/api/matchups?recent=1&recentLimit=6", {
           cache: "no-store",
-          signal: abortController.signal,
         });
         const data = (await response.json()) as RecentMatchupsApiResponse;
 
@@ -835,30 +872,38 @@ export default function MatchupExplorer({
           throw new Error(data.error || "Failed to fetch recent matchups.");
         }
 
-        setRecentMatchups(data.recentMatchups || []);
-      } catch (fetchError) {
-        if (abortController.signal.aborted) {
+        if (!isMountedRef.current) {
           return;
         }
 
-        setRecentMatchups([]);
-        setRecentMatchupsError(
-          fetchError instanceof Error
-            ? fetchError.message
-            : "Failed to fetch recent matchups."
-        );
+        recentMatchupsLoadedRef.current = true;
+        setRecentMatchups(data.recentMatchups || []);
+        setRecentMatchupsError(null);
+      } catch (fetchError) {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        if (isInitialLoad) {
+          setRecentMatchups([]);
+          setRecentMatchupsError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Failed to fetch recent matchups."
+          );
+        } else {
+          console.error("Error refreshing recent matchups:", fetchError);
+        }
       } finally {
-        if (!abortController.signal.aborted) {
+        recentMatchupsRefreshInFlightRef.current = false;
+
+        if (isInitialLoad && isMountedRef.current) {
           setRecentMatchupsLoading(false);
         }
       }
     };
 
     void loadRecentMatchups();
-
-    return () => {
-      abortController.abort();
-    };
   }, [refreshToken]);
 
   const updateQuery = (next: MatchupQueryState) => {
@@ -904,8 +949,58 @@ export default function MatchupExplorer({
     });
   };
 
+  const fetchCurrentMatchup = async (signal?: AbortSignal) => {
+    const params = new URLSearchParams({
+      player1: player1Id,
+      player2: player2Id,
+      recentLimit: String(recentMatchLimit),
+    });
+
+    if (player1Character) {
+      params.set("player1Character", player1Character);
+    }
+    if (player2Character) {
+      params.set("player2Character", player2Character);
+    }
+    player1ExcludedCharacters.forEach((character) => {
+      params.append("player1ExcludeCharacter", character);
+    });
+    player2ExcludedCharacters.forEach((character) => {
+      params.append("player2ExcludeCharacter", character);
+    });
+    if (timeRange !== "all") {
+      params.set("timeRange", timeRange);
+    }
+    if (timeRange === "custom") {
+      params.set("startDate", startDate);
+      params.set("endDate", endDate);
+      appendLocalDateRangeBounds(params, startDate, endDate);
+    }
+    if (recentMatchResultFilter !== "all") {
+      params.set("recentResult", recentMatchResultFilter);
+    }
+    if (recentMatchStockFilter !== "all") {
+      params.set("recentStock", recentMatchStockFilter);
+    }
+
+    const response = await fetch(`/api/matchups?${params.toString()}`, {
+      cache: "no-store",
+      signal,
+    });
+    const data = (await response.json()) as MatchupApiResponse;
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to fetch matchup data.");
+    }
+
+    return data;
+  };
+
   useEffect(() => {
+    matchupRequestKeyRef.current = matchupRequestKey;
+
     if (!player1QueryValue || !player2QueryValue) {
+      matchupDataRef.current = null;
       setMatchup(null);
       setError(null);
       setLoading(false);
@@ -913,6 +1008,7 @@ export default function MatchupExplorer({
     }
 
     if (players.length === 0) {
+      matchupDataRef.current = null;
       setMatchup(null);
       setError(null);
       setLoading(false);
@@ -920,6 +1016,7 @@ export default function MatchupExplorer({
     }
 
     if (!selectedPlayer1 || !selectedPlayer2) {
+      matchupDataRef.current = null;
       setMatchup(null);
       setError("Choose two valid players to compare.");
       setLoading(false);
@@ -927,6 +1024,7 @@ export default function MatchupExplorer({
     }
 
     if (player1Id === player2Id) {
+      matchupDataRef.current = null;
       setMatchup(null);
       setError("Choose two different players to compare.");
       setLoading(false);
@@ -934,6 +1032,7 @@ export default function MatchupExplorer({
     }
 
     if (timeRange === "custom" && (!startDate || !endDate)) {
+      matchupDataRef.current = null;
       setMatchup(null);
       setError(null);
       setLoading(false);
@@ -941,6 +1040,7 @@ export default function MatchupExplorer({
     }
 
     if (timeRange === "custom" && startDate > endDate) {
+      matchupDataRef.current = null;
       setMatchup(null);
       setError("Custom start date must be on or before the end date.");
       setLoading(false);
@@ -948,61 +1048,39 @@ export default function MatchupExplorer({
     }
 
     const abortController = new AbortController();
+    const requestKey = matchupRequestKey;
 
     const loadMatchup = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const params = new URLSearchParams({
-          player1: player1Id,
-          player2: player2Id,
-          recentLimit: String(recentMatchLimit),
-        });
+        const data = await fetchCurrentMatchup(abortController.signal);
 
-        if (player1Character) {
-          params.set("player1Character", player1Character);
-        }
-        if (player2Character) {
-          params.set("player2Character", player2Character);
-        }
-        player1ExcludedCharacters.forEach((character) => {
-          params.append("player1ExcludeCharacter", character);
-        });
-        player2ExcludedCharacters.forEach((character) => {
-          params.append("player2ExcludeCharacter", character);
-        });
-        if (timeRange !== "all") {
-          params.set("timeRange", timeRange);
-        }
-        if (timeRange === "custom") {
-          params.set("startDate", startDate);
-          params.set("endDate", endDate);
-          appendLocalDateRangeBounds(params, startDate, endDate);
-        }
-        if (recentMatchResultFilter !== "all") {
-          params.set("recentResult", recentMatchResultFilter);
-        }
-        if (recentMatchStockFilter !== "all") {
-          params.set("recentStock", recentMatchStockFilter);
+        if (
+          abortController.signal.aborted ||
+          !isMountedRef.current ||
+          matchupRequestKeyRef.current !== requestKey
+        ) {
+          return;
         }
 
-        const response = await fetch(`/api/matchups?${params.toString()}`, {
-          cache: "no-store",
-          signal: abortController.signal,
-        });
-        const data = (await response.json()) as MatchupApiResponse;
-
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to fetch matchup data.");
-        }
-
+        matchupDataRef.current = data;
         setMatchup(data);
+        setError(null);
       } catch (fetchError) {
         if (abortController.signal.aborted) {
           return;
         }
 
+        if (
+          !isMountedRef.current ||
+          matchupRequestKeyRef.current !== requestKey
+        ) {
+          return;
+        }
+
+        matchupDataRef.current = null;
         setMatchup(null);
         setError(
           fetchError instanceof Error
@@ -1010,7 +1088,11 @@ export default function MatchupExplorer({
             : "Failed to fetch matchup data."
         );
       } finally {
-        if (!abortController.signal.aborted) {
+        if (
+          !abortController.signal.aborted &&
+          isMountedRef.current &&
+          matchupRequestKeyRef.current === requestKey
+        ) {
           setLoading(false);
         }
       }
@@ -1023,23 +1105,57 @@ export default function MatchupExplorer({
     };
     // The exclusion arrays are normalized into stable string keys above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    player1Id,
-    player2Id,
-    player1QueryValue,
-    player2QueryValue,
-    player1Character,
-    player2Character,
-    player1ExcludedCharactersKey,
-    player2ExcludedCharactersKey,
-    timeRange,
-    startDate,
-    endDate,
-    recentMatchLimit,
-    recentMatchResultFilter,
-    recentMatchStockFilter,
-    refreshToken,
-  ]);
+  }, [matchupRequestKey]);
+
+  useEffect(() => {
+    if (
+      !refreshToken ||
+      loading ||
+      !matchupDataRef.current ||
+      matchupBackgroundRefreshInFlightRef.current ||
+      !player1QueryValue ||
+      !player2QueryValue ||
+      players.length === 0 ||
+      !selectedPlayer1 ||
+      !selectedPlayer2 ||
+      player1Id === player2Id ||
+      (timeRange === "custom" && (!startDate || !endDate || startDate > endDate))
+    ) {
+      return;
+    }
+
+    const requestKey = matchupRequestKey;
+
+    const refreshMatchup = async () => {
+      matchupBackgroundRefreshInFlightRef.current = true;
+
+      try {
+        const data = await fetchCurrentMatchup();
+
+        if (
+          !isMountedRef.current ||
+          matchupRequestKeyRef.current !== requestKey
+        ) {
+          return;
+        }
+
+        matchupDataRef.current = data;
+        setMatchup(data);
+        setError(null);
+      } catch (fetchError) {
+        if (isMountedRef.current) {
+          console.error("Error refreshing matchup data:", fetchError);
+        }
+      } finally {
+        matchupBackgroundRefreshInFlightRef.current = false;
+      }
+    };
+
+    void refreshMatchup();
+    // Background refresh must not touch foreground loading state or remount the
+    // current result tree on each live-update tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshToken]);
 
   const player1Options = players.filter(
     (player) => !player2Id || player.id.toString() !== player2Id

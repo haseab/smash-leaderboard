@@ -1316,6 +1316,10 @@ export default function SmashTournamentELO({
   );
   const characterRankingsSentinelRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledCharacterRankingsRef = useRef(false);
+  const isMountedRef = useRef(false);
+  const currentMatchesPage = useRef<number>(1);
+  const eloSparklinesLoadedRef = useRef(false);
+  const eloSparklinesRefreshInFlightRef = useRef(false);
   const eligibleCharacterRankingPlayerIds = new Set(
     characterRankings
       .filter(
@@ -1359,6 +1363,14 @@ export default function SmashTournamentELO({
   const defaultCharacterBasedPlayerIdsKey = getPlayerIdSelectionKey(
     defaultCharacterBasedPlayerIds
   );
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Helper function to validate country code
   const isValidCountryCode = (countryCode: string | null): boolean => {
@@ -1507,6 +1519,10 @@ export default function SmashTournamentELO({
   useEffect(() => {
     currentMatchOutcomeFilters.current = matchOutcomeFilters;
   }, [matchOutcomeFilters]);
+
+  useEffect(() => {
+    currentMatchesPage.current = matchesPage;
+  }, [matchesPage]);
 
   useEffect(() => {
     if (selectedPlayerFilter.length === 0 && matchOutcomeFilters.result !== "all") {
@@ -2416,7 +2432,6 @@ export default function SmashTournamentELO({
             currentMatchOutcomeFilters.current
           )
         );
-        setMatchesPage(1);
       }
 
       void Promise.allSettled(refreshTasks).finally(() => {
@@ -2549,15 +2564,22 @@ export default function SmashTournamentELO({
       return;
     }
 
-    const abortController = new AbortController();
+    if (eloSparklinesRefreshInFlightRef.current) {
+      return;
+    }
+
+    const isInitialLoad = !eloSparklinesLoadedRef.current;
 
     const fetchEloSparklines = async () => {
-      setLoadingEloSparklines(true);
+      eloSparklinesRefreshInFlightRef.current = true;
+
+      if (isInitialLoad) {
+        setLoadingEloSparklines(true);
+      }
 
       try {
         const response = await fetch("/api/player-elo-sparklines?range=30d", {
           cache: "no-store",
-          signal: abortController.signal,
         });
         const data = (await response.json()) as {
           histories?: Record<string, EloHistoryPoint[]>;
@@ -2568,26 +2590,32 @@ export default function SmashTournamentELO({
           throw new Error(data.error || "Failed to fetch ELO sparklines");
         }
 
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        eloSparklinesLoadedRef.current = true;
         setEloSparklines(data.histories || {});
       } catch (err) {
-        if (abortController.signal.aborted) {
+        if (!isMountedRef.current) {
           return;
         }
 
         console.error("Error fetching ELO sparklines:", err);
-        setEloSparklines({});
+
+        if (isInitialLoad) {
+          setEloSparklines({});
+        }
       } finally {
-        if (!abortController.signal.aborted) {
+        eloSparklinesRefreshInFlightRef.current = false;
+
+        if (isInitialLoad && isMountedRef.current) {
           setLoadingEloSparklines(false);
         }
       }
     };
 
     void fetchEloSparklines();
-
-    return () => {
-      abortController.abort();
-    };
   }, [defaultTab, pathname, players.length, lastUpdated]);
 
   useEffect(() => {
@@ -2904,6 +2932,23 @@ export default function SmashTournamentELO({
       ? [...uniqueMatches, ...existingMatches]
       : [...existingMatches, ...uniqueMatches];
   };
+
+  const mergeFreshMatchesIntoVisibleList = (
+    existingMatches: Match[],
+    freshMatches: Match[]
+  ) => {
+    if (existingMatches.length === 0) {
+      return freshMatches;
+    }
+
+    const freshMatchIds = new Set(freshMatches.map((match) => match.id));
+    const preservedExistingMatches = existingMatches.filter(
+      (match) => !freshMatchIds.has(match.id)
+    );
+
+    return [...freshMatches, ...preservedExistingMatches];
+  };
+
   const fetchMatches = async (
     page: number = 1,
     append: boolean = false,
@@ -2970,6 +3015,8 @@ export default function SmashTournamentELO({
 
       if (append) {
         setMatches((prev) => [...prev, ...matches]);
+      } else if (isBackgroundRefresh) {
+        setMatches((prev) => mergeFreshMatchesIntoVisibleList(prev, matches));
       } else {
         setMatches(matches);
         setMatchContextId(null);
@@ -2978,7 +3025,11 @@ export default function SmashTournamentELO({
         setHasMoreMatchesBelow(false);
       }
 
-      setHasMoreMatches(hasMore);
+      if (!isBackgroundRefresh) {
+        setHasMoreMatches(hasMore);
+      } else if (currentMatchesPage.current <= 1 && matches.length === 0) {
+        setHasMoreMatches(hasMore);
+      }
     } catch (err) {
       console.error("Error fetching matches:", err);
       // Don't set error state for matches as it's secondary to players
