@@ -3,7 +3,7 @@
 import CharacterProfilePicture from "@/components/CharacterProfilePicture";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 interface CharacterDropdownProps {
   characters: string[];
@@ -23,6 +23,15 @@ const normalizeCharacters = (characters: string[]) =>
         .filter(Boolean)
     )
   ).sort();
+
+const normalizeSelectedCharacters = (characters: string[]) =>
+  Array.from(
+    new Set(
+      characters
+        .map((character) => getCanonicalCharacterName(character))
+        .filter(Boolean)
+    )
+  );
 
 export default function CharacterDropdown({
   characters,
@@ -64,11 +73,33 @@ export default function CharacterDropdown({
     };
   }, [isOpen]);
 
-  const normalizedOptions = normalizeCharacters([...characters, ...selectedValues]);
+  const normalizedSelectedValues = useMemo(
+    () => normalizeSelectedCharacters(selectedValues),
+    [selectedValues]
+  );
+  const selectedCharacterSet = useMemo(
+    () => new Set(normalizedSelectedValues),
+    [normalizedSelectedValues]
+  );
+  const normalizedOptions = useMemo(() => {
+    const options = normalizeCharacters([...characters, ...normalizedSelectedValues]);
+    const selectedOptions = normalizedSelectedValues.filter((character) =>
+      options.includes(character)
+    );
+    const unselectedOptions = options.filter(
+      (character) => !selectedCharacterSet.has(character)
+    );
+
+    return [...selectedOptions, ...unselectedOptions];
+  }, [characters, normalizedSelectedValues, selectedCharacterSet]);
 
   const normalizedQuery = query.trim().toLowerCase();
-  const filteredCharacters = normalizedOptions.filter((character) =>
-    normalizedQuery ? character.toLowerCase().includes(normalizedQuery) : true
+  const filteredCharacters = useMemo(
+    () =>
+      normalizedOptions.filter((character) =>
+        normalizedQuery ? character.toLowerCase().includes(normalizedQuery) : true
+      ),
+    [normalizedOptions, normalizedQuery]
   );
 
   useEffect(() => {
@@ -82,20 +113,8 @@ export default function CharacterDropdown({
       return;
     }
 
-    if (normalizedQuery) {
-      setActiveIndex(0);
-      return;
-    }
-
-    const selectedIndex =
-      selectedValues.length > 0
-        ? filteredCharacters.findIndex(
-            (character) => character === selectedValues[0]
-          )
-        : -1;
-
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-  }, [filteredCharacters, isOpen, normalizedQuery, selectedValues]);
+    setActiveIndex(0);
+  }, [filteredCharacters, isOpen]);
 
   const handleToggleCharacter = (character: string) => {
     if (disabled) {
@@ -103,18 +122,20 @@ export default function CharacterDropdown({
     }
 
     if (!multiple) {
-      onChange(selectedValues[0] === character ? [] : [character]);
+      onChange(normalizedSelectedValues[0] === character ? [] : [character]);
       setIsOpen(false);
       setQuery("");
       return;
     }
 
-    if (selectedValues.includes(character)) {
-      onChange(selectedValues.filter((value) => value !== character));
+    if (selectedCharacterSet.has(character)) {
+      onChange(
+        normalizedSelectedValues.filter((value) => value !== character)
+      );
       return;
     }
 
-    onChange([...selectedValues, character]);
+    onChange([...normalizedSelectedValues, character]);
   };
 
   const clearSelection = () => {
@@ -164,7 +185,7 @@ export default function CharacterDropdown({
       {label ? (
         <label className="mb-3 block text-sm font-medium text-gray-300">
           {label}
-          {multiple ? ` (${selectedValues.length} selected)` : ""}
+          {multiple ? ` (${normalizedSelectedValues.length} selected)` : ""}
         </label>
       ) : null}
 
@@ -175,11 +196,11 @@ export default function CharacterDropdown({
         className="flex min-h-[3.5rem] w-full items-center justify-between rounded-xl border border-gray-600 bg-gray-700/95 px-4 py-3 text-left text-white transition-colors duration-200 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <div className="min-w-0 flex-1">
-          {selectedValues.length === 0 ? (
+          {normalizedSelectedValues.length === 0 ? (
             <span className="text-gray-400">{placeholder}</span>
           ) : multiple ? (
             <div className="flex flex-wrap gap-1.5">
-              {selectedValues.slice(0, 2).map((character) => (
+              {normalizedSelectedValues.slice(0, 2).map((character) => (
                 <span
                   key={character}
                   className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white"
@@ -187,27 +208,27 @@ export default function CharacterDropdown({
                   <CharacterProfilePicture
                     characterName={character}
                     size="sm"
-                    className="h-5 w-5 border-white/30"
+                    className="!h-5 !w-5 border-white/30"
                     alt={character}
                   />
                   <span>{character}</span>
                 </span>
               ))}
-              {selectedValues.length > 2 && (
+              {normalizedSelectedValues.length > 2 && (
                 <span className="inline-flex items-center rounded-md bg-gray-600 px-2 py-1 text-xs font-medium text-white">
-                  +{selectedValues.length - 2} more
+                  +{normalizedSelectedValues.length - 2} more
                 </span>
               )}
             </div>
           ) : (
             <span className="flex items-center gap-2 truncate">
               <CharacterProfilePicture
-                characterName={selectedValues[0]}
+                characterName={normalizedSelectedValues[0]}
                 size="sm"
                 className="h-6 w-6 border-gray-400"
-                alt={selectedValues[0]}
+                alt={normalizedSelectedValues[0]}
               />
-              <span className="truncate">{selectedValues[0]}</span>
+              <span className="truncate">{normalizedSelectedValues[0]}</span>
             </span>
           )}
         </div>
@@ -232,10 +253,10 @@ export default function CharacterDropdown({
               />
             </div>
 
-            {selectedValues.length > 0 && (
+            {normalizedSelectedValues.length > 0 && (
               <div className="mt-3 flex items-center justify-between gap-3">
                 <div className="text-xs font-medium text-gray-400">
-                  {selectedValues.length} selected
+                  {normalizedSelectedValues.length} selected
                 </div>
                 <button
                   type="button"
@@ -256,7 +277,7 @@ export default function CharacterDropdown({
               </div>
             ) : (
               filteredCharacters.map((character, index) => {
-                const isSelected = selectedValues.includes(character);
+                const isSelected = selectedCharacterSet.has(character);
                 const isActive = index === activeIndex;
 
                 return (

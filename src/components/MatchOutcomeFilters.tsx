@@ -19,6 +19,7 @@ interface MatchOutcomeFiltersProps {
   resultDisabled?: boolean;
   resultDisabledMessage?: string;
   compact?: boolean;
+  showStockHint?: boolean;
 }
 
 const resultOptions: Array<{ value: MatchResultFilter; label: string }> = [
@@ -56,6 +57,7 @@ export default function MatchOutcomeFilters({
   resultDisabled = false,
   resultDisabledMessage,
   compact = false,
+  showStockHint = true,
 }: MatchOutcomeFiltersProps) {
   const setResult = (result: MatchResultFilter) => {
     onChange({ ...value, result });
@@ -140,9 +142,11 @@ export default function MatchOutcomeFilters({
               );
             })}
           </div>
-          <div className="mt-2 text-xs text-gray-500">
-            Applies to completed 1v1 matches.
-          </div>
+          {showStockHint && (
+            <div className="mt-2 text-xs text-gray-500">
+              Applies to completed 1v1 matches.
+            </div>
+          )}
         </div>
       </div>
 

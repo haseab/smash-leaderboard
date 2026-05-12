@@ -105,34 +105,147 @@ const specialMappings: Record<string, string> = {
   STEVE: "STEVE",
   ALEX: "STEVE",
   ZOMBIE: "STEVE",
+  "MINECRAFT STEVE": "STEVE",
+  "MINECRAFT ALEX": "STEVE",
+  ALPH: "OLIMAR",
+  "BOWSER JR": "BOWSER JR.",
+  "BOWSER JUNIOR": "BOWSER JR.",
+  "LARRY KOOPA": "BOWSER JR.",
+  LARRY: "BOWSER JR.",
+  "WENDY O KOOPA": "BOWSER JR.",
+  "WENDY O. KOOPA": "BOWSER JR.",
+  WENDY: "BOWSER JR.",
+  "IGGY KOOPA": "BOWSER JR.",
+  IGGY: "BOWSER JR.",
+  "MORTON KOOPA JR": "BOWSER JR.",
+  "MORTON KOOPA JR.": "BOWSER JR.",
+  MORTON: "BOWSER JR.",
+  "LEMMY KOOPA": "BOWSER JR.",
+  LEMMY: "BOWSER JR.",
+  "LUDWIG VON KOOPA": "BOWSER JR.",
+  LUDWIG: "BOWSER JR.",
+  "ROY KOOPA": "BOWSER JR.",
+  SQUIRTLE: "POKEMON TRAINER",
+  IVYSAUR: "POKEMON TRAINER",
+  CHARIZARD: "POKEMON TRAINER",
+  ERDRICK: "HERO",
+  SOLO: "HERO",
+  EIGHT: "HERO",
+  LUMINARY: "HERO",
   "R.O.B.": "R.O.B.",
+  "R.O.B": "R.O.B.",
+  ROB: "R.O.B.",
+  "R O B": "R.O.B.",
   "MR. GAME & WATCH": "MR. GAME & WATCH",
+  "MR GAME & WATCH": "MR. GAME & WATCH",
+  "MR GAME AND WATCH": "MR. GAME & WATCH",
+  "MR. GAME AND WATCH": "MR. GAME & WATCH",
+  "GAME & WATCH": "MR. GAME & WATCH",
+  "GAME AND WATCH": "MR. GAME & WATCH",
+  "G&W": "MR. GAME & WATCH",
   // Characters that might be stored differently in the database
   "KING K ROOL": "KING K. ROOL",
   "KING K. ROOL": "KING K. ROOL",
   ROSALINA: "ROSALINA & LUMA",
+  LUMA: "ROSALINA & LUMA",
   "ROSALINA & LUMA": "ROSALINA & LUMA",
   "POKEMON TRAINER": "POKEMON TRAINER",
+  "POKEMON TRAINER: SQUIRTLE": "POKEMON TRAINER",
+  "POKEMON TRAINER: IVYSAUR": "POKEMON TRAINER",
+  "POKEMON TRAINER: CHARIZARD": "POKEMON TRAINER",
   PYRA: "PYRA/MYTHRA",
   MYTHRA: "PYRA/MYTHRA",
   "PYRA/MYTHRA": "PYRA/MYTHRA",
+  "PYRA & MYTHRA": "PYRA/MYTHRA",
+  "PYRA AND MYTHRA": "PYRA/MYTHRA",
   AEGIS: "PYRA/MYTHRA",
+  PYTHRA: "PYRA/MYTHRA",
+  "BANJO-KAZOOIE": "BANJO & KAZOOIE",
+  "BANJO KAZOOIE": "BANJO & KAZOOIE",
+  BANJO: "BANJO & KAZOOIE",
+  "PAC MAN": "PAC-MAN",
+  "DUCK HUNT DUO": "DUCK HUNT",
+  "DUCK HUNT DOG": "DUCK HUNT",
 };
 
 const canonicalDisplayMappings: Record<string, string> = {
   STEVE: "STEVE",
+  OLIMAR: "Olimar",
+  "BOWSER JR.": "Bowser Jr.",
+  HERO: "Hero",
+  "BANJO & KAZOOIE": "Banjo & Kazooie",
   "KING K. ROOL": "KING K. ROOL",
   "ROSALINA & LUMA": "ROSALINA & LUMA",
   "POKEMON TRAINER": "POK\u00c9MON TRAINER",
   "PYRA/MYTHRA": "PYRA/MYTHRA",
+  "R.O.B.": "R.O.B.",
+  "MR. GAME & WATCH": "MR. GAME & WATCH",
+  "PAC-MAN": "Pac-Man",
+  "DUCK HUNT": "Duck Hunt",
 };
 
 const characterAliasQueryValues: Record<string, string[]> = {
-  STEVE: ["Steve", "Alex", "Enderman", "Zombie"],
+  STEVE: ["Steve", "Alex", "Enderman", "Zombie", "Minecraft Steve", "Minecraft Alex"],
+  OLIMAR: ["Olimar", "Alph"],
+  "BOWSER JR.": [
+    "Bowser Jr.",
+    "Bowser Jr",
+    "Bowser Junior",
+    "Larry",
+    "Larry Koopa",
+    "Wendy",
+    "Wendy O. Koopa",
+    "Iggy",
+    "Iggy Koopa",
+    "Morton",
+    "Morton Koopa Jr.",
+    "Lemmy",
+    "Lemmy Koopa",
+    "Ludwig",
+    "Ludwig von Koopa",
+    "Roy Koopa",
+  ],
+  HERO: ["Hero", "Erdrick", "Solo", "Eight", "Luminary"],
   "KING K. ROOL": ["King K. Rool", "King K Rool"],
-  "ROSALINA & LUMA": ["Rosalina & Luma", "Rosalina"],
-  "POKEMON TRAINER": ["Pokemon Trainer", "POKEMON TRAINER", "POK\u00c9MON TRAINER"],
-  "PYRA/MYTHRA": ["Pyra/Mythra", "Pyra", "Mythra"],
+  "ROSALINA & LUMA": ["Rosalina & Luma", "Rosalina", "Luma"],
+  "POKEMON TRAINER": [
+    "Pokemon Trainer",
+    "POKEMON TRAINER",
+    "POK\u00c9MON TRAINER",
+    "Squirtle",
+    "Ivysaur",
+    "Charizard",
+    "Pokemon Trainer: Squirtle",
+    "Pokemon Trainer: Ivysaur",
+    "Pokemon Trainer: Charizard",
+  ],
+  "PYRA/MYTHRA": [
+    "Pyra/Mythra",
+    "Pyra & Mythra",
+    "Pyra and Mythra",
+    "Pyra",
+    "Mythra",
+    "Aegis",
+    "Pythra",
+  ],
+  "R.O.B.": ["R.O.B.", "R.O.B", "ROB", "R O B"],
+  "MR. GAME & WATCH": [
+    "Mr. Game & Watch",
+    "Mr Game & Watch",
+    "Mr. Game and Watch",
+    "Mr Game and Watch",
+    "Game & Watch",
+    "Game and Watch",
+    "G&W",
+  ],
+  "BANJO & KAZOOIE": [
+    "Banjo & Kazooie",
+    "Banjo-Kazooie",
+    "Banjo Kazooie",
+    "Banjo",
+  ],
+  "PAC-MAN": ["Pac-Man", "Pac Man"],
+  "DUCK HUNT": ["Duck Hunt", "Duck Hunt Duo", "Duck Hunt Dog"],
 };
 
 const stripDiacritics = (value: string) =>
@@ -179,8 +292,47 @@ export function expandCharacterAliasQueryValues(characterName: string): string[]
 
   const normalizedName = normalizeCharacterName(trimmedName);
   const aliases = characterAliasQueryValues[normalizedName] || [trimmedName];
+  const values = new Set<string>();
 
-  return Array.from(new Set(aliases));
+  for (const alias of aliases) {
+    const trimmedAlias = alias.trim();
+
+    if (!trimmedAlias) {
+      continue;
+    }
+
+    const normalizedAlias = normalizeCharacterName(trimmedAlias);
+    const strippedAlias = stripDiacritics(trimmedAlias);
+
+    values.add(trimmedAlias);
+
+    if (strippedAlias !== trimmedAlias) {
+      values.add(strippedAlias);
+    }
+
+    values.add(strippedAlias.toUpperCase());
+    values.add(strippedAlias.toLowerCase());
+
+    if (normalizedAlias) {
+      values.add(normalizedAlias);
+
+      const canonicalDisplayName = canonicalDisplayMappings[normalizedAlias];
+      if (canonicalDisplayName) {
+        values.add(canonicalDisplayName);
+      }
+    }
+  }
+
+  if (normalizedName) {
+    values.add(normalizedName);
+
+    const canonicalDisplayName = canonicalDisplayMappings[normalizedName];
+    if (canonicalDisplayName) {
+      values.add(canonicalDisplayName);
+    }
+  }
+
+  return Array.from(values);
 }
 
 // Helper function to normalize character names (handle ALL CAPS, etc.)

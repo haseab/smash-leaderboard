@@ -2,7 +2,7 @@
 
 import { getPlayerQueryLabel } from "@/lib/playerQuery";
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 export interface PlayerDropdownPlayer {
   id: number | string;
@@ -44,6 +44,28 @@ export default function PlayerDropdown({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const orderedPlayers = useMemo(() => {
+    const selectedPlayers = selectedIds
+      .map((selectedId) =>
+        players.find((player) => String(player.id) === selectedId)
+      )
+      .filter((player): player is PlayerDropdownPlayer => Boolean(player));
+    const unselectedPlayers = players.filter(
+      (player) => !selectedIdSet.has(String(player.id))
+    );
+
+    return [...selectedPlayers, ...unselectedPlayers];
+  }, [players, selectedIds, selectedIdSet]);
+  const selectedPlayers = useMemo(
+    () =>
+      selectedIds
+        .map((selectedId) =>
+          players.find((player) => String(player.id) === selectedId)
+        )
+        .filter((player): player is PlayerDropdownPlayer => Boolean(player)),
+    [players, selectedIds]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -72,17 +94,21 @@ export default function PlayerDropdown({
   }, [isOpen]);
 
   const normalizedQuery = query.trim().toLowerCase();
-  const filteredPlayers = players.filter((player) => {
-    if (!normalizedQuery) {
-      return true;
-    }
+  const filteredPlayers = useMemo(
+    () =>
+      orderedPlayers.filter((player) => {
+        if (!normalizedQuery) {
+          return true;
+        }
 
-    const labelValue = getPlayerQueryLabel(player).toLowerCase();
-    return (
-      labelValue.includes(normalizedQuery) ||
-      String(player.id).toLowerCase().includes(normalizedQuery)
-    );
-  });
+        const labelValue = getPlayerQueryLabel(player).toLowerCase();
+        return (
+          labelValue.includes(normalizedQuery) ||
+          String(player.id).toLowerCase().includes(normalizedQuery)
+        );
+      }),
+    [normalizedQuery, orderedPlayers]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -95,26 +121,8 @@ export default function PlayerDropdown({
       return;
     }
 
-    if (normalizedQuery) {
-      setActiveIndex(0);
-      return;
-    }
-
-    const selectedIndex =
-      selectedIds.length > 0
-        ? filteredPlayers.findIndex(
-            (player) => String(player.id) === selectedIds[0]
-          )
-        : -1;
-
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-  }, [filteredPlayers, isOpen, normalizedQuery, selectedIds]);
-
-  const selectedPlayers = selectedIds
-    .map((selectedId) =>
-      players.find((player) => String(player.id) === selectedId)
-    )
-    .filter((player): player is PlayerDropdownPlayer => Boolean(player));
+    setActiveIndex(0);
+  }, [filteredPlayers, isOpen]);
 
   const handleTogglePlayer = (playerId: string) => {
     if (disabled) {
@@ -128,7 +136,7 @@ export default function PlayerDropdown({
       return;
     }
 
-    if (selectedIds.includes(playerId)) {
+    if (selectedIdSet.has(playerId)) {
       onChange(selectedIds.filter((selectedId) => selectedId !== playerId));
       return;
     }
@@ -262,7 +270,7 @@ export default function PlayerDropdown({
             ) : (
               filteredPlayers.map((player, index) => {
                 const playerId = String(player.id);
-                const isSelected = selectedIds.includes(playerId);
+                const isSelected = selectedIdSet.has(playerId);
                 const isActive = index === activeIndex;
 
                 return (

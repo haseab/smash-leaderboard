@@ -20,7 +20,10 @@ import {
   type MatchOutcomeFilterState,
 } from "@/lib/matchOutcomeFilters";
 import { Player } from "@/lib/prisma";
-import { getCanonicalCharacterName } from "@/utils/characterMapping";
+import {
+  characterToFileMapping,
+  getCanonicalCharacterName,
+} from "@/utils/characterMapping";
 import {
   ChevronDown,
   ChevronUp,
@@ -222,6 +225,54 @@ const CHARACTER_RANKING_PLAYER_LIMIT_OPTIONS: CharacterRankingPlayerRowLimit[] =
   "all",
 ];
 
+const formatRosterCharacterName = (characterName: string) => {
+  const specialDisplayNames: Record<string, string> = {
+    "BANJO & KAZOOIE": "Banjo & Kazooie",
+    "DR. MARIO": "Dr. Mario",
+    "KING K. ROOL": "King K. Rool",
+    "MR. GAME & WATCH": "Mr. Game & Watch",
+    "PAC-MAN": "Pac-Man",
+    "PYRA/MYTHRA": "Pyra/Mythra",
+    "R.O.B.": "R.O.B.",
+  };
+
+  if (specialDisplayNames[characterName]) {
+    return specialDisplayNames[characterName];
+  }
+
+  return characterName
+    .split(" ")
+    .map((word) => {
+      if (word === "&") {
+        return word;
+      }
+
+      return word
+        .split("/")
+        .map((slashPart) =>
+          slashPart
+            .split("-")
+            .map(
+              (hyphenPart) =>
+                hyphenPart.charAt(0).toUpperCase() +
+                hyphenPart.slice(1).toLowerCase()
+            )
+            .join("-")
+        )
+        .join("/");
+    })
+    .join(" ");
+};
+
+const ALL_CHARACTER_OPTIONS = Array.from(
+  new Set(
+    Object.keys(characterToFileMapping)
+      .map(formatRosterCharacterName)
+      .map((character) => getCanonicalCharacterName(character))
+      .filter(Boolean)
+  )
+).sort((a, b) => a.localeCompare(b));
+
 const getSoloTeamPlayer = (
   teamRanking: TeamRanking
 ): TeamRankingPlayer | null => {
@@ -256,6 +307,61 @@ const getUniqueQueryValues = (values: string[]) =>
 
 const getPlayerIdSelectionKey = (playerIds: string[]) =>
   Array.from(new Set(playerIds)).sort().join("|");
+
+type SearchParamsReader = {
+  get: (name: string) => string | null;
+  getAll: (name: string) => string[];
+};
+
+const hasAppliedMatchFilterParams = (params: SearchParamsReader) =>
+  params.getAll("player").length > 0 ||
+  params.getAll("character").length > 0 ||
+  params.get("only1v1") === "true" ||
+  params.get("only2v2") === "true" ||
+  params.get("sameTeam") === "true" ||
+  Boolean(params.get("teamRanking")) ||
+  Boolean(params.get("startDate")) ||
+  Boolean(params.get("endDate")) ||
+  Boolean(params.get("matchId")) ||
+  (params.get("result") !== null && params.get("result") !== "all") ||
+  (params.get("stock") !== null && params.get("stock") !== "all");
+
+const getMatchFilterStateKey = ({
+  playerFilter,
+  characterFilter,
+  only1v1,
+  only2v2,
+  sameTeamOnly,
+  teamRankingFilter,
+  startDateFilter,
+  endDateFilter,
+  outcomeFilters,
+  matchId,
+}: {
+  playerFilter: string[];
+  characterFilter: string[];
+  only1v1: boolean;
+  only2v2: boolean;
+  sameTeamOnly: boolean;
+  teamRankingFilter: string;
+  startDateFilter: string;
+  endDateFilter: string;
+  outcomeFilters: MatchOutcomeFilterState;
+  matchId: string;
+}) =>
+  JSON.stringify({
+    player: getPlayerIdSelectionKey(playerFilter),
+    character: getUniqueQueryValues(characterFilter).sort().join("|"),
+    only1v1,
+    only2v2,
+    sameTeamOnly,
+    teamRankingFilter: teamRankingFilter.trim(),
+    startDateFilter,
+    endDateFilter,
+    result: outcomeFilters.result,
+    stock: outcomeFilters.stock,
+    matchId: matchId.trim().replace(/\D/g, ""),
+  });
 
 const getDaysAgo = (lastMatchDate: string | null | undefined): number | null => {
   if (!lastMatchDate) return null;
@@ -1246,6 +1352,8 @@ export default function SmashTournamentELO({
   } | null>(null);
   const CACHE_DURATION = 30000; // 30 seconds
   const [matchesPage, setMatchesPage] = useState<number>(1);
+  const [loadingMatchHistory, setLoadingMatchHistory] =
+    useState<boolean>(false);
   const [loadingMoreMatches, setLoadingMoreMatches] = useState<boolean>(false);
   const [hasMoreMatches, setHasMoreMatches] = useState<boolean>(true);
   const [loadingMatchesAbove, setLoadingMatchesAbove] =
@@ -1315,7 +1423,13 @@ export default function SmashTournamentELO({
     new Set()
   );
   const characterRankingsSentinelRef = useRef<HTMLDivElement | null>(null);
+  const matchHistoryResultsRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledCharacterRankingsRef = useRef(false);
+  const lastAutoScrolledMatchFilterSearchKeyRef = useRef<string | null>(null);
+  const lastAutoSubmittedMatchFilterStateKeyRef = useRef<string | null>(null);
+  const suppressNextMatchFilterAutoSubmitRef = useRef(false);
+  const handleSearchRef = useRef<() => Promise<void>>(async () => {});
+  const hasHandledInitialPlayerHashRef = useRef(false);
   const isMountedRef = useRef(false);
   const currentMatchesPage = useRef<number>(1);
   const eloSparklinesLoadedRef = useRef(false);
@@ -1380,64 +1494,100 @@ export default function SmashTournamentELO({
 
   // Initialize filters from URL params on matches page
   useEffect(() => {
-    if (defaultTab === "matches") {
-      const playerQueryValues = getUniqueQueryValues(
-        searchParams.getAll("player")
-      );
-      const characters = getUniqueQueryValues(
-        searchParams
-          .getAll("character")
-          .map((character) => getCanonicalCharacterName(character))
-      );
-      const only1v1Param = searchParams.get("only1v1") === "true";
-      const only2v2Param =
-        searchParams.get("only2v2") === "true" && !only1v1Param;
-      const sameTeamParam =
-        searchParams.get("sameTeam") === "true" &&
-        only2v2Param &&
-        playerQueryValues.length === 2;
-      const teamRankingParam = (searchParams.get("teamRanking") || "").replace(
-        /\D/g,
-        ""
-      );
-      const startDateParam = getValidDateQueryValue(
-        searchParams.get("startDate")
-      );
-      const endDateParam = getValidDateQueryValue(searchParams.get("endDate"));
-      const resultParam =
-        playerQueryValues.length > 0
-          ? parseMatchResultFilter(searchParams.get("result"))
-          : "all";
-      const stockParam = parseMatchStockFilter(searchParams.get("stock"));
-      const matchIdParam = searchParams.get("matchId") || "";
-      const hasFilters =
-        playerQueryValues.length > 0 ||
-        characters.length > 0 ||
-        only1v1Param ||
-        only2v2Param ||
-        teamRankingParam.length > 0 ||
-        startDateParam.length > 0 ||
-        endDateParam.length > 0 ||
-        resultParam !== "all" ||
-        stockParam !== "all";
-
-      setSelectedPlayerFilter(
-        resolvePlayerQueryValuesToIds(playerQueryValues, players)
-      );
-      setSelectedCharacterFilter(characters);
-      setOnly1v1(only1v1Param);
-      setOnly2v2(only2v2Param);
-      setSameTeamOnly(sameTeamParam);
-      setTeamRankingFilter(teamRankingParam);
-      setMatchStartDateFilter(startDateParam);
-      setMatchEndDateFilter(endDateParam);
-      setMatchOutcomeFilters({
-        result: resultParam,
-        stock: stockParam,
-      });
-      setMatchIdSearchInput(matchIdParam.replace(/\D/g, ""));
-      setShowFilters(hasFilters);
+    if (defaultTab !== "matches") {
+      lastAppliedMatchFiltersSearchKeyRef.current = null;
+      return;
     }
+
+    const searchParamsKey = searchParams.toString();
+    if (lastAppliedMatchFiltersSearchKeyRef.current === searchParamsKey) {
+      return;
+    }
+
+    const playerQueryValues = getUniqueQueryValues(
+      searchParams.getAll("player")
+    );
+    if (playerQueryValues.length > 0 && players.length === 0) {
+      return;
+    }
+
+    const characters = getUniqueQueryValues(
+      searchParams
+        .getAll("character")
+        .map((character) => getCanonicalCharacterName(character))
+    );
+    const only1v1Param = searchParams.get("only1v1") === "true";
+    const only2v2Param =
+      searchParams.get("only2v2") === "true" && !only1v1Param;
+    const sameTeamParam =
+      searchParams.get("sameTeam") === "true" &&
+      only2v2Param &&
+      playerQueryValues.length === 2;
+    const teamRankingParam = (searchParams.get("teamRanking") || "").replace(
+      /\D/g,
+      ""
+    );
+    const startDateParam = getValidDateQueryValue(
+      searchParams.get("startDate")
+    );
+    const endDateParam = getValidDateQueryValue(searchParams.get("endDate"));
+    const resultParam =
+      playerQueryValues.length > 0
+        ? parseMatchResultFilter(searchParams.get("result"))
+        : "all";
+    const stockParam = parseMatchStockFilter(searchParams.get("stock"));
+    const matchIdParam = searchParams.get("matchId") || "";
+    const hasFilters =
+      playerQueryValues.length > 0 ||
+      characters.length > 0 ||
+      only1v1Param ||
+      only2v2Param ||
+      teamRankingParam.length > 0 ||
+      startDateParam.length > 0 ||
+      endDateParam.length > 0 ||
+      resultParam !== "all" ||
+      stockParam !== "all";
+    const hasAppliedFilters = hasAppliedMatchFilterParams(searchParams);
+
+    const resolvedPlayerFilterIds = resolvePlayerQueryValuesToIds(
+      playerQueryValues,
+      players
+    );
+
+    setSelectedPlayerFilter(resolvedPlayerFilterIds);
+    setSelectedCharacterFilter(characters);
+    setOnly1v1(only1v1Param);
+    setOnly2v2(only2v2Param);
+    setSameTeamOnly(sameTeamParam);
+    setTeamRankingFilter(teamRankingParam);
+    setMatchStartDateFilter(startDateParam);
+    setMatchEndDateFilter(endDateParam);
+    setMatchOutcomeFilters({
+      result: resultParam,
+      stock: stockParam,
+    });
+    setMatchIdSearchInput(matchIdParam.replace(/\D/g, ""));
+    setShowFilters(hasFilters);
+    suppressNextMatchFilterAutoSubmitRef.current = hasAppliedFilters;
+    lastAutoSubmittedMatchFilterStateKeyRef.current =
+      hasAppliedFilters
+        ? getMatchFilterStateKey({
+            playerFilter: resolvedPlayerFilterIds,
+            characterFilter: characters,
+            only1v1: only1v1Param,
+            only2v2: only2v2Param,
+            sameTeamOnly: sameTeamParam,
+            teamRankingFilter: teamRankingParam,
+            startDateFilter: startDateParam,
+            endDateFilter: endDateParam,
+            outcomeFilters: {
+              result: resultParam,
+              stock: stockParam,
+            },
+            matchId: matchIdParam,
+          })
+        : null;
+    lastAppliedMatchFiltersSearchKeyRef.current = searchParamsKey;
   }, [defaultTab, players, searchParams]);
 
   useEffect(() => {
@@ -1482,6 +1632,7 @@ export default function SmashTournamentELO({
   const currentOverallRankingsView =
     useRef<OverallRankingsView>("all-characters");
   const autoRefreshInFlight = useRef<boolean>(false);
+  const lastAppliedMatchFiltersSearchKeyRef = useRef<string | null>(null);
 
   // Update refs when state changes
   useEffect(() => {
@@ -1615,6 +1766,71 @@ export default function SmashTournamentELO({
     hasFetchedCharacterRankings,
   ]);
 
+  useEffect(() => {
+    if (defaultTab !== "matches") {
+      lastAutoScrolledMatchFilterSearchKeyRef.current = null;
+      return;
+    }
+
+    const hasFilterQuery =
+      searchParams.getAll("player").length > 0 ||
+      searchParams.getAll("character").length > 0 ||
+      searchParams.get("only1v1") === "true" ||
+      searchParams.get("only2v2") === "true" ||
+      searchParams.get("sameTeam") === "true" ||
+      Boolean(searchParams.get("teamRanking")) ||
+      Boolean(searchParams.get("startDate")) ||
+      Boolean(searchParams.get("endDate")) ||
+      Boolean(searchParams.get("matchId")) ||
+      (searchParams.get("result") !== null &&
+        searchParams.get("result") !== "all") ||
+      (searchParams.get("stock") !== null &&
+        searchParams.get("stock") !== "all");
+
+    if (!hasFilterQuery) {
+      lastAutoScrolledMatchFilterSearchKeyRef.current = null;
+      return;
+    }
+
+    const hasVisibleFilterPanelQuery =
+      searchParams.getAll("player").length > 0 ||
+      searchParams.getAll("character").length > 0 ||
+      searchParams.get("only1v1") === "true" ||
+      searchParams.get("only2v2") === "true" ||
+      searchParams.get("sameTeam") === "true" ||
+      Boolean(searchParams.get("teamRanking")) ||
+      Boolean(searchParams.get("startDate")) ||
+      Boolean(searchParams.get("endDate")) ||
+      (searchParams.get("result") !== null &&
+        searchParams.get("result") !== "all") ||
+      (searchParams.get("stock") !== null &&
+        searchParams.get("stock") !== "all");
+
+    if (hasVisibleFilterPanelQuery && !showFilters) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    const searchParamsKey = searchParams.toString();
+    if (lastAutoScrolledMatchFilterSearchKeyRef.current === searchParamsKey) {
+      return;
+    }
+
+    lastAutoScrolledMatchFilterSearchKeyRef.current = searchParamsKey;
+
+    const timeoutId = window.setTimeout(() => {
+      matchHistoryResultsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 150);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [defaultTab, loading, searchParams, showFilters]);
+
   // Function to handle tab navigation
   const handleTabClick = (tabId: string) => {
     switch (tabId) {
@@ -1642,6 +1858,22 @@ export default function SmashTournamentELO({
   // Function to handle player click and scroll
   const handlePlayerClick = (playerId: number) => {
     router.push(`/players#player-${playerId}`);
+  };
+
+  const handleCharacterRankingRowClick = (
+    characterRanking: CharacterRanking
+  ) => {
+    const params = new URLSearchParams();
+    params.append(
+      "player",
+      serializePlayerIdToQueryValue(characterRanking.player_id, players)
+    );
+    params.append(
+      "character",
+      getCanonicalCharacterName(characterRanking.character_name)
+    );
+
+    router.push(`/matches?${params.toString()}`);
   };
 
   const handleTeamClick = (teamRanking: TeamRanking) => {
@@ -2063,6 +2295,39 @@ export default function SmashTournamentELO({
     }
   };
 
+  useEffect(() => {
+    if (
+      hasHandledInitialPlayerHashRef.current ||
+      defaultTab !== "players" ||
+      pathname !== "/players" ||
+      players.length === 0
+    ) {
+      return;
+    }
+
+    const hash = window.location.hash;
+    if (!hash.startsWith("#player-")) {
+      return;
+    }
+
+    const playerId = parseInt(hash.replace("#player-", ""), 10);
+    if (Number.isNaN(playerId)) {
+      return;
+    }
+
+    hasHandledInitialPlayerHashRef.current = true;
+
+    const timeoutId = window.setTimeout(() => {
+      const element = document.getElementById(`player-${playerId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        window.setTimeout(() => highlightPlayerProfile(playerId), 500);
+      }
+    }, 200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [defaultTab, pathname, players.length]);
+
   // Load Google Font
   useEffect(() => {
     const link = document.createElement("link");
@@ -2157,7 +2422,7 @@ export default function SmashTournamentELO({
       const newUrl = queryString ? `/matches?${queryString}` : "/matches";
 
       // Use replace to avoid adding to history stack
-      router.replace(newUrl);
+      router.replace(newUrl, { scroll: false });
     }
   };
 
@@ -2294,19 +2559,6 @@ export default function SmashTournamentELO({
           });
         }
 
-        // Check for hash scroll when using cached data
-        const hash = window.location.hash;
-        if (hash.startsWith("#player-")) {
-          const playerId = parseInt(hash.replace("#player-", ""));
-          setTimeout(() => {
-            const element = document.getElementById(`player-${playerId}`);
-            if (element) {
-              element.scrollIntoView({ behavior: "smooth", block: "center" });
-              // Highlight the profile after scrolling
-              setTimeout(() => highlightPlayerProfile(playerId), 500);
-            }
-          }, 200); // Increased timeout for cached data
-        }
       } else {
         // Fallback to fetch if cache is corrupted
         fetchPlayers();
@@ -2532,19 +2784,6 @@ export default function SmashTournamentELO({
         }
       }
 
-      // Check for hash after players are loaded
-      const hash = window.location.hash;
-      if (hash.startsWith("#player-")) {
-        const playerId = parseInt(hash.replace("#player-", ""));
-        setTimeout(() => {
-          const element = document.getElementById(`player-${playerId}`);
-          if (element) {
-            element.scrollIntoView({ behavior: "smooth", block: "center" });
-            // Highlight the profile after scrolling
-            setTimeout(() => highlightPlayerProfile(playerId), 500);
-          }
-        }, 200);
-      }
     } catch (err) {
       console.error("Error fetching players:", err);
       setError("Failed to load players. Please try again later.");
@@ -2968,9 +3207,16 @@ export default function SmashTournamentELO({
       return;
     }
 
-    // Only set loading state for initial page load (not for appending or background refresh)
-    if (!append && !isBackgroundRefresh) {
+    const shouldShowLoading = !append && !isBackgroundRefresh;
+    const shouldUsePageLoading =
+      shouldShowLoading && loading && matches.length === 0;
+    const shouldUseMatchHistoryLoading =
+      shouldShowLoading && !shouldUsePageLoading;
+
+    if (shouldUsePageLoading) {
       setLoading(true);
+    } else if (shouldUseMatchHistoryLoading) {
+      setLoadingMatchHistory(true);
     }
 
     try {
@@ -3034,9 +3280,10 @@ export default function SmashTournamentELO({
       console.error("Error fetching matches:", err);
       // Don't set error state for matches as it's secondary to players
     } finally {
-      // Clear loading state after initial load
-      if (!append && !isBackgroundRefresh) {
+      if (shouldUsePageLoading) {
         setLoading(false);
+      } else if (shouldUseMatchHistoryLoading) {
+        setLoadingMatchHistory(false);
       }
     }
   };
@@ -3078,8 +3325,16 @@ export default function SmashTournamentELO({
       return;
     }
 
-    if (!isBackgroundRefresh) {
+    const shouldShowLoading = !isBackgroundRefresh;
+    const shouldUsePageLoading =
+      shouldShowLoading && loading && matches.length === 0;
+    const shouldUseMatchHistoryLoading =
+      shouldShowLoading && !shouldUsePageLoading;
+
+    if (shouldUsePageLoading) {
       setLoading(true);
+    } else if (shouldUseMatchHistoryLoading) {
+      setLoadingMatchHistory(true);
     }
     setMatchSearchError(null);
     setAutoRefreshDisabled(true);
@@ -3128,8 +3383,10 @@ export default function SmashTournamentELO({
           : "Failed to fetch match context. Please try again."
       );
     } finally {
-      if (!isBackgroundRefresh) {
+      if (shouldUsePageLoading) {
         setLoading(false);
+      } else if (shouldUseMatchHistoryLoading) {
+        setLoadingMatchHistory(false);
       }
     }
   };
@@ -3440,6 +3697,69 @@ export default function SmashTournamentELO({
     );
   };
 
+  useEffect(() => {
+    handleSearchRef.current = handleSearch;
+  });
+
+  useEffect(() => {
+    if (defaultTab !== "matches") {
+      lastAutoSubmittedMatchFilterStateKeyRef.current = null;
+      suppressNextMatchFilterAutoSubmitRef.current = false;
+      return;
+    }
+
+    if (!hasAppliedMatchFilterParams(searchParams)) {
+      lastAutoSubmittedMatchFilterStateKeyRef.current = null;
+      suppressNextMatchFilterAutoSubmitRef.current = false;
+      return;
+    }
+
+    if (suppressNextMatchFilterAutoSubmitRef.current) {
+      suppressNextMatchFilterAutoSubmitRef.current = false;
+      return;
+    }
+
+    const nextFilterStateKey = getMatchFilterStateKey({
+      playerFilter: selectedPlayerFilter,
+      characterFilter: selectedCharacterFilter,
+      only1v1,
+      only2v2,
+      sameTeamOnly,
+      teamRankingFilter,
+      startDateFilter: matchStartDateFilter,
+      endDateFilter: matchEndDateFilter,
+      outcomeFilters: matchOutcomeFilters,
+      matchId: matchIdSearchInput,
+    });
+
+    if (
+      lastAutoSubmittedMatchFilterStateKeyRef.current === nextFilterStateKey
+    ) {
+      return;
+    }
+
+    lastAutoSubmittedMatchFilterStateKeyRef.current = nextFilterStateKey;
+
+    const timeoutId = window.setTimeout(() => {
+      void handleSearchRef.current();
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    defaultTab,
+    searchParams,
+    selectedPlayerFilter,
+    selectedCharacterFilter,
+    only1v1,
+    only2v2,
+    sameTeamOnly,
+    teamRankingFilter,
+    matchStartDateFilter,
+    matchEndDateFilter,
+    matchOutcomeFilters,
+    matchIdSearchInput,
+  ]);
+
   // Determine tier based on ELO using percentile-based thresholds
   const getTier = (
     elo: number,
@@ -3469,6 +3789,7 @@ export default function SmashTournamentELO({
   const hasActiveMatchDateFilter = Boolean(
     matchStartDateFilter || matchEndDateFilter
   );
+  const hasAppliedMatchFilterQuery = hasAppliedMatchFilterParams(searchParams);
   const matchDateRangeLabel = getMatchDateRangeLabel(
     matchStartDateFilter,
     matchEndDateFilter
@@ -3487,6 +3808,14 @@ export default function SmashTournamentELO({
     teamRankingFilter.trim().length > 0,
     hasActiveMatchDateFilter,
   ].filter(Boolean).length + activeMatchOutcomeFilterCount;
+  const matchTypeFilter = only1v1 ? "1v1" : only2v2 ? "2v2" : "all";
+  const getMatchTypeButtonClasses = (active: boolean) =>
+    [
+      "inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors",
+      active
+        ? "bg-blue-600 text-white shadow-sm"
+        : "text-gray-300 hover:bg-gray-800 hover:text-white",
+    ].join(" ");
   const playerDateFilterError = getDateRangeFilterError(
     playerStartDateFilter,
     playerEndDateFilter
@@ -4705,7 +5034,13 @@ export default function SmashTournamentELO({
                                     return (
                                       <tr
                                         key={characterRanking.id}
-                                        className="hover:bg-gray-800 transition-colors duration-150"
+                                        onClick={() =>
+                                          handleCharacterRankingRowClick(
+                                            characterRanking
+                                          )
+                                        }
+                                        className="cursor-pointer hover:bg-gray-800 transition-colors duration-150"
+                                        title={`View match history for ${possessiveCharacterLabel}`}
                                       >
                                         <td
                                           className={`px-2 py-3 md:px-6 md:py-8 whitespace-nowrap ${
@@ -4750,12 +5085,7 @@ export default function SmashTournamentELO({
                                         </td>
                                         <td className="px-2 py-3 md:px-6 md:py-8 text-white">
                                           <div
-                                            className="flex min-w-0 items-center gap-2 md:gap-4 cursor-pointer hover:opacity-80 transition-opacity"
-                                            onClick={() =>
-                                              handlePlayerClick(
-                                                characterRanking.player_id
-                                              )
-                                            }
+                                            className="flex min-w-0 items-center gap-2 md:gap-4 transition-opacity hover:opacity-80"
                                             title={possessiveCharacterLabel}
                                           >
                                             <div className="shrink-0">
@@ -5678,11 +6008,16 @@ export default function SmashTournamentELO({
                         {/* Filter Section */}
                         {showFilters && (
                           <>
-                            <div className="mb-6 rounded-2xl border border-gray-700 bg-gray-900/70 p-5 shadow-lg">
-                              <div className="flex flex-col gap-3 border-b border-gray-700/70 pb-4 sm:flex-row sm:items-center sm:justify-between">
-                                <h3 className="text-lg font-semibold text-white">
-                                  Filter Matches
-                                </h3>
+                            <div className="mb-6 rounded-2xl border border-gray-700/80 bg-gray-900/65 p-4 shadow-lg sm:p-5">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-700 bg-gray-950/60 text-blue-300">
+                                    <Filter size={18} />
+                                  </div>
+                                  <h3 className="text-lg font-semibold text-white">
+                                    Match Filters
+                                  </h3>
+                                </div>
                                 {activeMatchFilterCount > 0 && (
                                   <div className="inline-flex w-fit items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100">
                                     {activeMatchFilterCount} active
@@ -5690,8 +6025,7 @@ export default function SmashTournamentELO({
                                 )}
                               </div>
 
-                              <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-                                {/* Player Filter */}
+                              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
                                 <div>
                                   <PlayerDropdown
                                     players={players}
@@ -5713,19 +6047,9 @@ export default function SmashTournamentELO({
                                   />
                                 </div>
 
-                                {/* Character Filter */}
                                 <div>
                                   <CharacterDropdown
-                                    characters={Array.from(
-                                      new Set(
-                                        matches.flatMap((match) =>
-                                          match.participants.map(
-                                            (participant) =>
-                                              participant.smash_character
-                                          )
-                                        )
-                                      )
-                                    ).sort()}
+                                    characters={ALL_CHARACTER_OPTIONS}
                                     selectedValues={selectedCharacterFilter}
                                     onChange={(nextCharacters) => {
                                       setSelectedCharacterFilter(nextCharacters);
@@ -5747,6 +6071,7 @@ export default function SmashTournamentELO({
                                   onEndDateChange={setMatchEndDateFilter}
                                   error={matchDateFilterError}
                                   showClear={hasActiveMatchDateFilter}
+                                  clearLabel="Clear"
                                   onClear={() => {
                                     setMatchStartDateFilter("");
                                     setMatchEndDateFilter("");
@@ -5755,7 +6080,64 @@ export default function SmashTournamentELO({
                                 />
                               </div>
 
-                              <div className="mt-5 border-t border-gray-700/70 pt-5">
+                              <div className="mt-5 grid gap-5 border-t border-gray-700/70 pt-5 xl:grid-cols-[auto_minmax(0,1fr)] xl:items-start">
+                                <div>
+                                  <div className="mb-2 text-xs font-semibold text-gray-400">
+                                    Match type
+                                  </div>
+                                  <div className="inline-flex rounded-xl border border-gray-700 bg-gray-950/40 p-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOnly1v1(false);
+                                        setOnly2v2(false);
+                                        setSameTeamOnly(false);
+                                        setTeamRankingFilter("");
+                                      }}
+                                      aria-pressed={matchTypeFilter === "all"}
+                                      className={getMatchTypeButtonClasses(
+                                        matchTypeFilter === "all"
+                                      )}
+                                    >
+                                      All
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextOnly1v1 = !only1v1;
+                                        setOnly1v1(nextOnly1v1);
+                                        setOnly2v2(false);
+                                        setSameTeamOnly(false);
+                                        setTeamRankingFilter("");
+                                      }}
+                                      aria-pressed={matchTypeFilter === "1v1"}
+                                      className={getMatchTypeButtonClasses(
+                                        matchTypeFilter === "1v1"
+                                      )}
+                                    >
+                                      <Swords size={15} />
+                                      1v1
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextOnly2v2 = !only2v2;
+                                        setOnly2v2(nextOnly2v2);
+                                        setOnly1v1(false);
+                                        setSameTeamOnly(false);
+                                        setTeamRankingFilter("");
+                                      }}
+                                      aria-pressed={matchTypeFilter === "2v2"}
+                                      className={getMatchTypeButtonClasses(
+                                        matchTypeFilter === "2v2"
+                                      )}
+                                    >
+                                      <Users size={15} />
+                                      2v2
+                                    </button>
+                                  </div>
+                                </div>
+
                                 <MatchOutcomeFilters
                                   value={matchOutcomeFilters}
                                   onChange={setMatchOutcomeFilters}
@@ -5769,127 +6151,111 @@ export default function SmashTournamentELO({
                                   resultDisabled={!hasMatchResultPerspective}
                                   resultDisabledMessage="Select a player to filter wins or losses."
                                   compact
+                                  showStockHint={false}
                                 />
-                              </div>
 
-                              {/* Additional Filters */}
-                              <div className="mt-5 grid gap-3 border-t border-gray-700/70 pt-5 lg:grid-cols-2">
-                                {/* 1v1 Filter */}
-                                <label
-                                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
-                                    only1v1
-                                      ? "border-blue-500/60 bg-blue-600/15"
-                                      : "border-gray-700 bg-gray-800/75 hover:border-gray-600 hover:bg-gray-800"
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={only1v1}
-                                    onChange={(e) => {
-                                      const checked = e.target.checked;
-                                      setOnly1v1(checked);
-                                      setSameTeamOnly(false);
-                                      setTeamRankingFilter("");
-                                      if (checked) {
-                                        setOnly2v2(false);
-                                      }
-                                    }}
-                                    className="h-5 w-5 rounded border-gray-500 bg-gray-950 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <span className="text-sm font-semibold text-white sm:text-base">
-                                    Show only 1v1 matches (2 players)
-                                  </span>
-                                </label>
-
-                                {/* 2v2 Filter */}
-                                <label
-                                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
-                                    only2v2
-                                      ? "border-blue-500/60 bg-blue-600/15"
-                                      : "border-gray-700 bg-gray-800/75 hover:border-gray-600 hover:bg-gray-800"
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={only2v2}
-                                    onChange={(e) => {
-                                      const checked = e.target.checked;
-                                      setOnly2v2(checked);
-                                      setSameTeamOnly(false);
-                                      setTeamRankingFilter("");
-                                      if (checked) {
-                                        setOnly1v1(false);
-                                      }
-                                    }}
-                                    className="h-5 w-5 rounded border-gray-500 bg-gray-950 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <span className="text-sm font-semibold text-white sm:text-base">
-                                    Show only 2v2 matches (4 players)
-                                  </span>
-                                </label>
                                 {sameTeamOnly && (
-                                  <div className="rounded-xl border border-blue-500/40 bg-blue-950/40 px-4 py-3 text-sm text-blue-100 lg:col-span-2">
-                                    Showing matches where the selected players
-                                    were teammates.
+                                  <div className="rounded-xl border border-blue-500/40 bg-blue-950/30 px-4 py-3 text-sm text-blue-100 xl:col-span-2">
+                                    Showing selected players as teammates.
                                   </div>
                                 )}
                               </div>
 
-                              {/* Search and Clear Buttons */}
-                              <div className="mt-6 flex flex-col gap-3 border-t border-gray-700/70 pt-5 sm:flex-row sm:justify-end">
-                                <button
-                                  onClick={handleSearch}
-                                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
-                                >
-                                  <Swords size={16} />
-                                  Search
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    setSelectedPlayerFilter([]);
-                                    setSelectedCharacterFilter([]);
-                                    setOnly1v1(false);
-                                    setOnly2v2(false);
-                                    setSameTeamOnly(false);
-                                    setTeamRankingFilter("");
-                                    setMatchStartDateFilter("");
-                                    setMatchEndDateFilter("");
-                                    setMatchOutcomeFilters(
-                                      DEFAULT_MATCH_OUTCOME_FILTERS
-                                    );
-                                    setMatchIdSearchInput("");
-                                    setMatchContextId(null);
-                                    setMatchSearchError(null);
-                                    setMatchesPage(1);
-                                    setHasMoreMatchesAbove(false);
-                                    setHasMoreMatchesBelow(false);
-                                    setAutoRefreshDisabled(false);
-                                    updateMatchesURL([], [], false);
-                                    await fetchMatches(1, false, [], [], false);
-                                  }}
-                                  className="inline-flex h-11 items-center justify-center rounded-xl border border-red-500/50 bg-red-600/90 px-6 font-semibold text-white transition-colors duration-200 hover:bg-red-600"
-                                >
-                                  Clear All
-                                </button>
+                              <div className="mt-5 flex flex-col gap-3 border-t border-gray-700/70 pt-5 sm:flex-row sm:justify-end">
+                                {hasAppliedMatchFilterQuery ? (
+                                  <button
+                                    onClick={async () => {
+                                      suppressNextMatchFilterAutoSubmitRef.current = true;
+                                      lastAutoSubmittedMatchFilterStateKeyRef.current =
+                                        getMatchFilterStateKey({
+                                          playerFilter: [],
+                                          characterFilter: [],
+                                          only1v1: false,
+                                          only2v2: false,
+                                          sameTeamOnly: false,
+                                          teamRankingFilter: "",
+                                          startDateFilter: "",
+                                          endDateFilter: "",
+                                          outcomeFilters:
+                                            DEFAULT_MATCH_OUTCOME_FILTERS,
+                                          matchId: "",
+                                        });
+                                      setSelectedPlayerFilter([]);
+                                      setSelectedCharacterFilter([]);
+                                      setOnly1v1(false);
+                                      setOnly2v2(false);
+                                      setSameTeamOnly(false);
+                                      setTeamRankingFilter("");
+                                      setMatchStartDateFilter("");
+                                      setMatchEndDateFilter("");
+                                      setMatchOutcomeFilters(
+                                        DEFAULT_MATCH_OUTCOME_FILTERS
+                                      );
+                                      setMatchIdSearchInput("");
+                                      setMatchContextId(null);
+                                      setMatchSearchError(null);
+                                      setMatchesPage(1);
+                                      setHasMoreMatchesAbove(false);
+                                      setHasMoreMatchesBelow(false);
+                                      setAutoRefreshDisabled(false);
+                                      updateMatchesURL([], [], false);
+                                      await fetchMatches(1, false, [], [], false);
+                                    }}
+                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-600 bg-gray-800 px-6 font-semibold text-gray-100 transition-colors duration-200 hover:border-red-500/60 hover:bg-red-950/50 hover:text-red-100"
+                                  >
+                                    <X size={16} />
+                                    Clear All
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={handleSearch}
+                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
+                                  >
+                                    <Swords size={16} />
+                                    Apply Filters
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </>
                         )}
 
-                        {matches.length === 0 ? (
-                          <div className="text-gray-400 text-center py-16">
-                            <p className="text-xl font-bold">
-                              {matchSearchError
-                                ? "Match lookup failed"
-                                : "No matches found with current filters"}
-                            </p>
-                            <p className="mt-2">
-                              {matchSearchError
-                                ? "Try a different match ID or clear the match search to return to the full list."
-                                : "Try adjusting your filters or clear them to see all matches"}
-                            </p>
-                          </div>
-                        ) : (
+                        <div
+                          ref={matchHistoryResultsRef}
+                          className="scroll-mt-4"
+                        />
+
+                        <div className="relative">
+                          {loadingMatchHistory && matches.length > 0 && (
+                            <div className="pointer-events-none sticky top-4 z-20 mb-4 flex justify-center">
+                              <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-gray-950/90 px-4 py-2 text-sm font-semibold text-blue-100 shadow-lg">
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-transparent" />
+                                Updating matches
+                              </div>
+                            </div>
+                          )}
+
+                          {matches.length === 0 && loadingMatchHistory ? (
+                            <div className="flex items-center justify-center py-16 text-gray-300">
+                              <div className="inline-flex items-center gap-3 rounded-full border border-gray-700 bg-gray-900/80 px-5 py-3 font-semibold">
+                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-transparent" />
+                                Updating matches
+                              </div>
+                            </div>
+                          ) : matches.length === 0 ? (
+                            <div className="text-gray-400 text-center py-16">
+                              <p className="text-xl font-bold">
+                                {matchSearchError
+                                  ? "Match lookup failed"
+                                  : "No matches found with current filters"}
+                              </p>
+                              <p className="mt-2">
+                                {matchSearchError
+                                  ? "Try a different match ID or clear the match search to return to the full list."
+                                  : "Try adjusting your filters or clear them to see all matches"}
+                              </p>
+                            </div>
+                          ) : (
                           <>
                             {isMatchContextActive &&
                               (loadingMatchesAbove || hasMoreMatchesAbove) && (
@@ -6134,6 +6500,7 @@ export default function SmashTournamentELO({
                             )}
                           </>
                         )}
+                        </div>
                       </div>
                     </div>
                   )}

@@ -582,9 +582,32 @@ export async function GET(request: Request) {
       }
     }
 
+    const hasSinglePlayerCharacterFilter =
+      resolvedPlayerFilterIds.length === 1 &&
+      characterFilter.length === 1 &&
+      !participantCountFilter;
+
+    if (hasSinglePlayerCharacterFilter) {
+      whereConditions.push({
+        match_participants: {
+          some: {
+            player: resolvedPlayerFilterIds[0],
+            is_cpu: false,
+            smash_character: {
+              in: expandCharacterAliasQueryValues(characterFilter[0]),
+            },
+          },
+        },
+      });
+    }
+
     // Player filter: ALL specified players must be in the match (AND logic)
     // Only apply if not already handled by participant-count filter above
-    if (playerFilter.length > 0 && !participantCountFilter) {
+    if (
+      playerFilter.length > 0 &&
+      !participantCountFilter &&
+      !hasSinglePlayerCharacterFilter
+    ) {
       // For each player, ensure they have a participant record in the match
       const playerConditions = resolvedPlayerFilterIds.map((playerId) => ({
         match_participants: {
@@ -598,7 +621,7 @@ export async function GET(request: Request) {
     }
 
     // Character filter: ALL specified characters must be used in the match (AND logic)
-    if (characterFilter.length > 0) {
+    if (characterFilter.length > 0 && !hasSinglePlayerCharacterFilter) {
       const characterConditions = characterFilter.map((character) => ({
         match_participants: {
           some: {
