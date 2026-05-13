@@ -193,7 +193,7 @@ export default function MatchCard({
 
   return (
     <div
-      className={`rounded-xl border border-gray-700 bg-gray-800 p-4 transition-colors hover:border-gray-600 ${className}`}
+      className={`rounded-xl border-2 border-gray-700 bg-gray-800 p-4 transition-colors hover:border-gray-600 ${className}`}
     >
       <div className="flex flex-col space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -245,7 +245,7 @@ export default function MatchCard({
             return (
               <div
                 key={participant.id}
-                className={`flex w-full rounded-lg border px-4 py-4 transition-all ${getParticipantCardClasses(
+                className={`flex w-full rounded-lg border-2 px-4 py-4 transition-all ${getParticipantCardClasses(
                   participant.has_won,
                 )}`}
               >
