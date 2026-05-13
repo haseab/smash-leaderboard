@@ -70,7 +70,7 @@ const formatEloDiff = (eloDiff: number) =>
   `${eloDiff > 0 ? "+" : ""}${eloDiff} ELO`;
 
 const getWinnerStockBadge = (
-  participants: MatchCardParticipant[]
+  participants: MatchCardParticipant[],
 ): WinnerStockBadge | null => {
   if (participants.length !== 2) {
     return null;
@@ -111,6 +111,27 @@ const getEloDiffBadgeClasses = (eloDiff: number) =>
       ? "border-red-300 bg-red-500/15 text-red-200"
       : "border-gray-500 bg-gray-700/60 text-gray-200";
 
+function MatchStatChip({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: number;
+  valueClassName: string;
+}) {
+  return (
+    <div className="inline-flex h-7 w-full items-center justify-between gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 text-xs text-gray-300 shadow-sm">
+      <span className="text-[9px] font-semibold uppercase leading-none tracking-[0.12em] text-gray-300/70">
+        {label}
+      </span>
+      <span className={`text-sm font-bold leading-none ${valueClassName}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function MatchPlayerAvatar({
   participant,
   picture,
@@ -126,7 +147,7 @@ function MatchPlayerAvatar({
   if (picture) {
     return (
       <div
-        className={`h-10 w-10 overflow-hidden rounded-full border-2 ${accentClasses}`}
+        className={`h-14 w-14 overflow-hidden rounded-full border-2 ${accentClasses}`}
       >
         <img
           src={picture}
@@ -139,7 +160,7 @@ function MatchPlayerAvatar({
 
   return (
     <div
-      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-xs font-bold text-white ${accentClasses}`}
+      className={`flex h-14 w-14 items-center justify-center rounded-full border-2 text-sm font-bold text-white ${accentClasses}`}
     >
       {getInitials(displayName)}
     </div>
@@ -164,10 +185,10 @@ export default function MatchCard({
 
   const getParticipantCardClasses = (hasWon: boolean) =>
     hasWon
-      ? "border-green-400 bg-green-800/60 shadow-lg shadow-green-500/20"
-      : "border-red-500 bg-red-800/60";
+      ? "border-green-400/70 bg-gray-900/80 shadow-lg shadow-black/20 ring-1 ring-green-400/10"
+      : "border-red-500/70 bg-gray-900/80 shadow-lg shadow-black/20 ring-1 ring-red-500/10";
 
-  const getCharacterTextClasses = (hasWon: boolean) =>
+  const getPlayerNameTextClasses = (hasWon: boolean) =>
     hasWon ? "text-green-400" : "text-red-300";
 
   return (
@@ -183,7 +204,11 @@ export default function MatchCard({
               type="button"
               onClick={onToggleTime}
               className="transition-colors duration-200 hover:text-gray-200 hover:underline hover:underline-offset-2"
-              title={showUtcTime ? "Click to show local time" : "Click to show UTC time"}
+              title={
+                showUtcTime
+                  ? "Click to show local time"
+                  : "Click to show UTC time"
+              }
             >
               {showUtcTime
                 ? new Date(match.created_at).toLocaleDateString("en-US", {
@@ -210,8 +235,8 @@ export default function MatchCard({
         <div className="grid gap-3 sm:grid-cols-2">
           {participants.map((participant) => {
             const picture =
-              players.find((player) => player.id === participant.player)?.picture ||
-              null;
+              players.find((player) => player.id === participant.player)
+                ?.picture || null;
             const participantWinnerStockBadge =
               winnerStockBadge?.playerId === participant.player
                 ? winnerStockBadge
@@ -220,22 +245,22 @@ export default function MatchCard({
             return (
               <div
                 key={participant.id}
-                className={`flex w-full flex-col space-y-3 rounded-lg border px-4 py-3 transition-all ${getParticipantCardClasses(
-                  participant.has_won
+                className={`flex w-full rounded-lg border px-4 py-4 transition-all ${getParticipantCardClasses(
+                  participant.has_won,
                 )}`}
               >
-                <div className="flex items-center justify-between space-x-9">
-                  <div className="flex items-center">
-                    <div className="relative">
+                <div className="flex min-w-0 flex-1 items-stretch justify-between gap-4">
+                  <div className="flex min-w-0 flex-1 items-center gap-8">
+                    <div className="relative shrink-0">
                       <MatchPlayerAvatar
                         participant={participant}
                         picture={picture}
                       />
-                      <div className="absolute bottom-0 -right-6">
+                      <div className="absolute -bottom-1 -right-5">
                         <CharacterProfilePicture
                           characterName={participant.smash_character}
                           size="sm"
-                          className={`h-6 w-6 border-2 ${
+                          className={`h-9 w-9 border-2 ${
                             participant.has_won
                               ? "border-green-400"
                               : "border-red-400"
@@ -243,79 +268,81 @@ export default function MatchCard({
                         />
                       </div>
                     </div>
-                  </div>
 
-                  <div className="min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => onPlayerClick(participant.player)}
-                      className="truncate text-left font-semibold text-white transition-colors hover:text-yellow-400"
-                    >
-                      {getParticipantDisplayName(participant)}
-                    </button>
-                    <div
-                      className={`flex items-center gap-2 text-sm font-medium ${getCharacterTextClasses(
-                        participant.has_won
-                      )}`}
-                    >
-                      {participant.smash_character}
-                    </div>
-                  </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => onPlayerClick(participant.player)}
+                          className={`min-w-0 truncate text-left text-xl font-extrabold leading-none transition-colors hover:text-yellow-400 ${getPlayerNameTextClasses(
+                            participant.has_won,
+                          )}`}
+                        >
+                          {getParticipantDisplayName(participant)}
+                        </button>
+                      </div>
 
-                  <div className="flex items-start gap-2 self-start">
-                    {(participant.elo_diff !== null &&
-                      participant.elo_diff !== undefined) ||
-                    participantWinnerStockBadge ? (
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <div className="min-w-0 max-w-full truncate text-base font-extrabold uppercase leading-tight tracking-[0.08em] text-gray-200">
+                          {participant.smash_character}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         {participant.elo_diff !== null &&
                         participant.elo_diff !== undefined ? (
                           <span
-                            className={`inline-flex min-h-5 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none whitespace-nowrap ${getEloDiffBadgeClasses(
-                              participant.elo_diff
+                            className={`inline-flex min-h-7 items-center rounded-full border px-3 py-1 text-sm font-bold leading-none whitespace-nowrap ${getEloDiffBadgeClasses(
+                              participant.elo_diff,
                             )}`}
                           >
                             {formatEloDiff(participant.elo_diff)}
                           </span>
                         ) : null}
+
                         {participantWinnerStockBadge ? (
                           <span
-                            className={`inline-flex min-h-5 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none whitespace-nowrap shadow-sm ${getWinnerStockBadgeClasses(
-                              participantWinnerStockBadge.variant
+                            className={`inline-flex min-h-7 items-center rounded-full border px-3 py-1 text-sm font-bold leading-none whitespace-nowrap shadow-md ${getWinnerStockBadgeClasses(
+                              participantWinnerStockBadge.variant,
                             )}`}
                           >
                             {participantWinnerStockBadge.label}
                           </span>
                         ) : null}
                       </div>
-                    ) : null}
-                    <div className="flex h-10 w-10 items-center justify-center">
-                      <img
-                        src={participant.has_won ? "/images/no1.png" : "/images/no2.png"}
-                        alt={participant.has_won ? "Winner" : "Loser"}
-                        className="h-8 w-8 object-contain"
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-stretch gap-3">
+                    <div className="flex w-[4.5rem] flex-col justify-center gap-1.5">
+                      <MatchStatChip
+                        label="KOs"
+                        value={participant.total_kos || 0}
+                        valueClassName="text-orange-300"
+                      />
+                      <MatchStatChip
+                        label="Falls"
+                        value={participant.total_falls || 0}
+                        valueClassName="text-purple-300"
+                      />
+                      <MatchStatChip
+                        label="SDs"
+                        value={participant.total_sds || 0}
+                        valueClassName="text-red-300"
                       />
                     </div>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded bg-black px-2 py-1">
-                    <div className="text-lg font-bold text-orange-400">
-                      {participant.total_kos || 0}
+                    <div className="flex h-full w-12 items-start justify-center pt-1">
+                      <img
+                        src={
+                          participant.has_won
+                            ? "/images/no1.png"
+                            : "/images/no2.png"
+                        }
+                        alt={participant.has_won ? "Winner" : "Loser"}
+                        className="h-11 w-11 object-contain"
+                      />
                     </div>
-                    <div className="text-gray-400">KOs</div>
-                  </div>
-                  <div className="rounded bg-black px-2 py-1">
-                    <div className="text-lg font-bold text-purple-400">
-                      {participant.total_falls || 0}
-                    </div>
-                    <div className="text-gray-400">Falls</div>
-                  </div>
-                  <div className="rounded bg-black px-2 py-1">
-                    <div className="text-lg font-bold text-red-400">
-                      {participant.total_sds || 0}
-                    </div>
-                    <div className="text-gray-400">SDs</div>
                   </div>
                 </div>
               </div>
