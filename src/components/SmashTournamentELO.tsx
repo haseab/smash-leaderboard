@@ -427,7 +427,7 @@ const parseTierListView = (value: string | null): TierListView => {
     case "best-character":
       return value;
     default:
-      return "best-character";
+      return "all-characters";
   }
 };
 
@@ -2069,11 +2069,11 @@ export default function SmashTournamentELO({
     params.delete(RANKING_QUERY_PLAYER_PARAM);
     params.delete(RANKING_QUERY_PLAYER_LIMIT_PARAM);
 
-    if (nextView === "best-character") {
+    if (nextView === "all-characters") {
       params.delete("tierView");
-      appendCharacterBasedFilterParams(params, mergedFilterState);
     } else {
       params.set("tierView", nextView);
+      appendCharacterBasedFilterParams(params, mergedFilterState);
     }
 
     const queryString = params.toString();
