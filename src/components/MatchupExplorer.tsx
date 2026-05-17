@@ -103,6 +103,7 @@ interface MatchupExplorerProps {
   players: MatchupExplorerPlayer[];
   isRefreshing: boolean;
   onPlayerClick: (playerId: number) => void;
+  onCharacterClick: (characterName: string) => void;
   refreshToken: number;
 }
 
@@ -737,6 +738,7 @@ export default function MatchupExplorer({
   players,
   isRefreshing,
   onPlayerClick,
+  onCharacterClick,
   refreshToken,
 }: MatchupExplorerProps) {
   const router = useRouter();
@@ -1730,6 +1732,7 @@ export default function MatchupExplorer({
                         showUtcTime={showUtcTime}
                         onToggleTime={() => setShowUtcTime((current) => !current)}
                         onPlayerClick={onPlayerClick}
+                        onCharacterClick={onCharacterClick}
                         headerActions={
                           <button
                             type="button"

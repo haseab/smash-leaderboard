@@ -35,6 +35,7 @@ interface MatchCardProps {
   showUtcTime: boolean;
   onToggleTime: () => void;
   onPlayerClick: (playerId: number) => void;
+  onCharacterClick: (characterName: string) => void;
   headerActions?: React.ReactNode;
   className?: string;
 }
@@ -173,6 +174,7 @@ export default function MatchCard({
   showUtcTime,
   onToggleTime,
   onPlayerClick,
+  onCharacterClick,
   headerActions,
   className = "",
 }: MatchCardProps) {
@@ -252,11 +254,28 @@ export default function MatchCard({
                 <div className="flex min-w-0 flex-1 items-stretch justify-between gap-4">
                   <div className="flex min-w-0 flex-1 items-center gap-8">
                     <div className="relative shrink-0">
-                      <MatchPlayerAvatar
-                        participant={participant}
-                        picture={picture}
-                      />
-                      <div className="absolute -bottom-1 -right-5">
+                      <button
+                        type="button"
+                        onClick={() => onPlayerClick(participant.player)}
+                        className="block rounded-full transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                        title={`Open ${getParticipantDisplayName(participant)} profile`}
+                        aria-label={`Open ${getParticipantDisplayName(participant)} profile`}
+                      >
+                        <MatchPlayerAvatar
+                          participant={participant}
+                          picture={picture}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onCharacterClick(participant.smash_character);
+                        }}
+                        className="absolute -bottom-1 -right-5 z-10 rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                        title={`Show who is the best ${participant.smash_character} player`}
+                        aria-label={`Show who is the best ${participant.smash_character} player`}
+                      >
                         <CharacterProfilePicture
                           characterName={participant.smash_character}
                           size="sm"
@@ -266,7 +285,7 @@ export default function MatchCard({
                               : "border-red-400"
                           }`}
                         />
-                      </div>
+                      </button>
                     </div>
 
                     <div className="min-w-0 flex-1">

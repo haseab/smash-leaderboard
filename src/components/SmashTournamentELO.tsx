@@ -1911,13 +1911,7 @@ export default function SmashTournamentELO({
     router.push(`/?${params.toString()}`);
   };
 
-  const handleCharacterRankingBadgeClick = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    characterName: string
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-
+  const handleCharacterRankingClick = (characterName: string) => {
     const params = new URLSearchParams();
     params.set("leaderboard", "character");
     params.set(
@@ -1925,6 +1919,15 @@ export default function SmashTournamentELO({
       getCanonicalCharacterName(characterName)
     );
     router.push(`/?${params.toString()}`);
+  };
+
+  const handleCharacterRankingBadgeClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    characterName: string
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    handleCharacterRankingClick(characterName);
   };
 
   const rankingQueryState: RankingQueryState = {
@@ -5856,6 +5859,7 @@ export default function SmashTournamentELO({
                         players={players}
                         isRefreshing={isRefreshing}
                         onPlayerClick={handlePlayerClick}
+                        onCharacterClick={handleCharacterRankingClick}
                         refreshToken={lastUpdated?.getTime() || 0}
                       />
                     </div>
@@ -6299,6 +6303,7 @@ export default function SmashTournamentELO({
                                     showUtcTime={showUtcTime}
                                     onToggleTime={() => setShowUtcTime(!showUtcTime)}
                                     onPlayerClick={handlePlayerClick}
+                                    onCharacterClick={handleCharacterRankingClick}
                                     headerActions={
                                       <>
                                         {(() => {
