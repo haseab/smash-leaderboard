@@ -5,12 +5,12 @@ import {
 } from "@/lib/matchOutcomeFilters";
 import { getDateRangeSearchParamBounds } from "@/lib/dateRange";
 import { resolvePlayersByQueryValues } from "@/lib/server/playerQueryResolver";
+import { jsonWithApiDebug } from "@/lib/server/apiDebug";
 import {
   expandCharacterAliasQueryValues,
   getCanonicalCharacterName,
 } from "@/utils/characterMapping";
 import { Prisma } from "@prisma/client";
-import { NextResponse } from "next/server";
 
 const MATCH_INCLUDE = {
   match_participants: {
@@ -288,6 +288,8 @@ const getStockFilteredMatchIds = async (stockRemaining: number) =>
   `);
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
+
   try {
     const { searchParams } = new URL(request.url);
     const page = parsePositiveInt(searchParams.get("page"), 1);
@@ -325,18 +327,50 @@ export async function GET(request: Request) {
       2,
       20
     );
+    const contextDirection =
+      directionParam === "above" || directionParam === "below"
+        ? directionParam
+        : null;
+    const teamRankingId = teamRankingParam
+      ? parseInt(teamRankingParam, 10)
+      : null;
+    const hasDateFilter = Boolean(startDate || endDateExclusive);
+    const getDebugMeta = (extra: Record<string, unknown> = {}) => ({
+      page,
+      limit,
+      playerFilterCount: playerFilter.length,
+      characterFilterCount: characterFilter.length,
+      only1v1,
+      only2v2,
+      sameTeamOnly,
+      hasDateFilter,
+      resultFilter,
+      stockFilter,
+      mode: matchIdParam ? "context" : "page",
+      contextDirection,
+      hasTeamRankingFilter: Boolean(teamRankingParam),
+      ...extra,
+    });
 
     if (hasInvalidDateInput) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/matches",
+        request,
+        startedAt,
         { error: "Invalid date filter" },
-        { status: 400 }
+        { status: 400 },
+        getDebugMeta({ reason: "invalid-date-filter" })
       );
     }
 
     if (hasInvertedDateRange) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/matches",
+        request,
+        startedAt,
         { error: "Start date must be on or before the end date" },
-        { status: 400 }
+        { status: 400 },
+        getDebugMeta({ reason: "inverted-date-filter" })
       );
     }
 
@@ -345,27 +379,27 @@ export async function GET(request: Request) {
       directionParam !== "above" &&
       directionParam !== "below"
     ) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/matches",
+        request,
+        startedAt,
         { error: "Invalid context direction" },
-        { status: 400 }
+        { status: 400 },
+        getDebugMeta({ reason: "invalid-context-direction" })
       );
     }
-
-    const contextDirection =
-      directionParam === "above" || directionParam === "below"
-        ? directionParam
-        : null;
-    const teamRankingId = teamRankingParam
-      ? parseInt(teamRankingParam, 10)
-      : null;
 
     if (
       teamRankingParam &&
       (!Number.isInteger(teamRankingId) || (teamRankingId ?? 0) <= 0)
     ) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/matches",
+        request,
+        startedAt,
         { error: "Invalid team ranking ID" },
-        { status: 400 }
+        { status: 400 },
+        getDebugMeta({ reason: "invalid-team-ranking" })
       );
     }
 
@@ -393,16 +427,27 @@ export async function GET(request: Request) {
 
     if (playerFilter.length > 0 && !allPlayerFiltersResolved) {
       if (matchIdParam) {
-        return NextResponse.json(
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
           { error: "Match not found with current filters" },
-          { status: 404 }
+          { status: 404 },
+          getDebugMeta({ reason: "unresolved-player-filter" })
         );
       }
 
-      return NextResponse.json({
+      return jsonWithApiDebug(
+        "/api/matches",
+        request,
+        startedAt,
+        {
         matches: [],
         pagination: { page, limit, hasMore: false },
-      });
+        },
+        undefined,
+        getDebugMeta({ rows: 0, reason: "unresolved-player-filter" })
+      );
     }
 
     // Build Prisma where conditions - all filtering at database level
@@ -436,10 +481,17 @@ export async function GET(request: Request) {
         await getQualifyingTeamRankingMatchIds(teamRankingId);
 
       if (qualifyingTeamMatchIds.length === 0 && !matchIdParam) {
-        return NextResponse.json({
-          matches: [],
-          pagination: { page, limit, hasMore: false },
-        });
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
+          {
+            matches: [],
+            pagination: { page, limit, hasMore: false },
+          },
+          undefined,
+          getDebugMeta({ rows: 0, reason: "no-team-ranking-matches" })
+        );
       }
 
       whereConditions.push({
@@ -453,10 +505,17 @@ export async function GET(request: Request) {
       );
 
       if (stockFilteredMatchIds.length === 0 && !matchIdParam) {
-        return NextResponse.json({
-          matches: [],
-          pagination: { page, limit, hasMore: false },
-        });
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
+          {
+            matches: [],
+            pagination: { page, limit, hasMore: false },
+          },
+          undefined,
+          getDebugMeta({ rows: 0, reason: "no-stock-filtered-matches" })
+        );
       }
 
       whereConditions.push({
@@ -537,10 +596,20 @@ export async function GET(request: Request) {
         );
         
         if (participantCountMatchIds.length === 0) {
-          return NextResponse.json({
-            matches: [],
-            pagination: { page, limit, hasMore: false },
-          });
+          return jsonWithApiDebug(
+            "/api/matches",
+            request,
+            startedAt,
+            {
+              matches: [],
+              pagination: { page, limit, hasMore: false },
+            },
+            undefined,
+            getDebugMeta({
+              rows: 0,
+              reason: "no-participant-count-player-matches",
+            })
+          );
         }
         
         whereConditions.push({
@@ -570,10 +639,20 @@ export async function GET(request: Request) {
         const participantCountMatchIds = await prisma.$queryRawUnsafe<Array<{ id: bigint }>>(participantCountQuery);
         
         if (participantCountMatchIds.length === 0) {
-          return NextResponse.json({
-            matches: [],
-            pagination: { page, limit, hasMore: false },
-          });
+          return jsonWithApiDebug(
+            "/api/matches",
+            request,
+            startedAt,
+            {
+              matches: [],
+              pagination: { page, limit, hasMore: false },
+            },
+            undefined,
+            getDebugMeta({
+              rows: 0,
+              reason: "no-participant-count-matches",
+            })
+          );
         }
         
         whereConditions.push({
@@ -653,9 +732,13 @@ export async function GET(request: Request) {
       const anchorMatchId = parseInt(matchIdParam, 10);
 
       if (Number.isNaN(anchorMatchId)) {
-        return NextResponse.json(
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
           { error: "Invalid match ID" },
-          { status: 400 }
+          { status: 400 },
+          getDebugMeta({ reason: "invalid-match-id" })
         );
       }
 
@@ -667,9 +750,13 @@ export async function GET(request: Request) {
       });
 
       if (!anchorMatch) {
-        return NextResponse.json(
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
           { error: "Match not found with current filters" },
-          { status: 404 }
+          { status: 404 },
+          getDebugMeta({ reason: "anchor-match-not-found" })
         );
       }
 
@@ -710,7 +797,7 @@ export async function GET(request: Request) {
           contextLimit
         );
 
-        return NextResponse.json({
+        const body = {
           matches: transformMatches([
             ...visibleAboveMatches,
             anchorMatch,
@@ -723,7 +810,16 @@ export async function GET(request: Request) {
             hasMoreAbove: aboveMatches.length > contextLimit,
             hasMoreBelow: belowMatches.length > contextLimit,
           },
-        });
+        };
+
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
+          body,
+          undefined,
+          getDebugMeta({ rows: body.matches.length, contextLimit })
+        );
       }
 
       const cursorMatchId = parseInt(
@@ -732,9 +828,13 @@ export async function GET(request: Request) {
       );
 
       if (Number.isNaN(cursorMatchId)) {
-        return NextResponse.json(
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
           { error: "Invalid context cursor match ID" },
-          { status: 400 }
+          { status: 400 },
+          getDebugMeta({ reason: "invalid-context-cursor" })
         );
       }
 
@@ -752,9 +852,13 @@ export async function GET(request: Request) {
             });
 
       if (!referenceMatch) {
-        return NextResponse.json(
+        return jsonWithApiDebug(
+          "/api/matches",
+          request,
+          startedAt,
           { error: "Context cursor match not found with current filters" },
-          { status: 404 }
+          { status: 404 },
+          getDebugMeta({ reason: "context-cursor-not-found" })
         );
       }
 
@@ -770,7 +874,7 @@ export async function GET(request: Request) {
         take: contextLimit + 1,
       });
 
-      return NextResponse.json({
+      const body = {
         matches: transformMatches(
           normalizeContextMatches(
             contextualMatches,
@@ -792,7 +896,16 @@ export async function GET(request: Request) {
               ? contextualMatches.length > contextLimit
               : undefined,
         },
-      });
+      };
+
+      return jsonWithApiDebug(
+        "/api/matches",
+        request,
+        startedAt,
+        body,
+        undefined,
+        getDebugMeta({ rows: body.matches.length, contextLimit })
+      );
     }
 
     // Get matches with pagination - all filtering done at database level
@@ -807,14 +920,21 @@ export async function GET(request: Request) {
     });
 
     if (!matches || matches.length === 0) {
-      return NextResponse.json({
-        matches: [],
-        pagination: {
-          page,
-          limit,
-          hasMore: false,
+      return jsonWithApiDebug(
+        "/api/matches",
+        request,
+        startedAt,
+        {
+          matches: [],
+          pagination: {
+            page,
+            limit,
+            hasMore: false,
+          },
         },
-      });
+        undefined,
+        getDebugMeta({ rows: 0, reason: "no-page-matches" })
+      );
     }
 
     const transformedMatches = transformMatches(matches);
@@ -824,19 +944,32 @@ export async function GET(request: Request) {
     );
 
     // Return matches with pagination info
-    return NextResponse.json({
+    const body = {
       matches: transformedMatches,
       pagination: {
         page,
         limit,
         hasMore: transformedMatches.length === limit,
       },
-    });
+    };
+
+    return jsonWithApiDebug(
+      "/api/matches",
+      request,
+      startedAt,
+      body,
+      undefined,
+      getDebugMeta({ rows: transformedMatches.length })
+    );
   } catch (error) {
     console.error("Error fetching matches:", error);
-    return NextResponse.json(
+    return jsonWithApiDebug(
+      "/api/matches",
+      request,
+      startedAt,
       { error: "Failed to fetch matches" },
-      { status: 500 }
+      { status: 500 },
+      { reason: "exception" }
     );
   }
 }

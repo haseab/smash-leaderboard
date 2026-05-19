@@ -2820,9 +2820,7 @@ export default function SmashTournamentELO({
       }
 
       try {
-        const response = await fetch("/api/player-elo-sparklines?range=30d", {
-          cache: "no-store",
-        });
+        const response = await fetch("/api/player-elo-sparklines?range=30d");
         const data = (await response.json()) as {
           histories?: Record<string, EloHistoryPoint[]>;
           error?: string;
@@ -2885,7 +2883,6 @@ export default function SmashTournamentELO({
         const response = await fetch(
           `/api/players/${playerId}/elo-history?range=${selectedRange}`,
           {
-            cache: "no-store",
             signal: abortController.signal,
           }
         );

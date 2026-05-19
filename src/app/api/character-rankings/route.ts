@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeAppUrl } from "@/lib/site-url";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { unstable_cache } from "next/cache";
-import { NextResponse } from "next/server";
+import { jsonWithApiDebug } from "@/lib/server/apiDebug";
 
 interface CharacterRankingQueryResult {
   id: bigint;
@@ -209,6 +209,8 @@ const getCachedCharacterRankingsIncludingInactive = unstable_cache(
 );
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
+
   try {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get("includeInactive") === "true";
@@ -229,7 +231,18 @@ export async function GET(request: Request) {
       { includeInactive }
     );
 
-    return NextResponse.json(characterRankings);
+    return jsonWithApiDebug(
+      "/api/character-rankings",
+      request,
+      startedAt,
+      characterRankings,
+      undefined,
+      {
+        rows: characterRankings.length,
+        includeInactive,
+        source: "unstable_cache",
+      }
+    );
   } catch (error) {
     console.error(
       "[GET /api/character-rankings] Error fetching character rankings:",
@@ -255,12 +268,16 @@ export async function GET(request: Request) {
       errorDetails
     );
 
-    return NextResponse.json(
+    return jsonWithApiDebug(
+      "/api/character-rankings",
+      request,
+      startedAt,
       {
         error: "Failed to fetch character rankings",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
+      { reason: "exception" }
     );
   }
 }

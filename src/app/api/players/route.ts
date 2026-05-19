@@ -1,9 +1,9 @@
 import { getDateRangeSearchParamBounds } from "@/lib/dateRange";
 import { prisma } from "@/lib/prisma";
+import { jsonWithApiDebug } from "@/lib/server/apiDebug";
 import { normalizeAppUrl } from "@/lib/site-url";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { unstable_cache } from "next/cache";
-import { NextResponse } from "next/server";
 
 interface PlayerQueryResult {
   id: bigint;
@@ -262,7 +262,26 @@ const getCachedPlayers = unstable_cache(
   }
 );
 
+const getPictureHostCounts = (players: TransformedPlayer[]) =>
+  players.reduce<Record<string, number>>((counts, player) => {
+    if (!player.picture) {
+      return counts;
+    }
+
+    let host = "relative";
+    try {
+      host = new URL(player.picture).hostname;
+    } catch {
+      // Relative app assets are grouped together.
+    }
+
+    counts[host] = (counts[host] || 0) + 1;
+    return counts;
+  }, {});
+
 export async function GET(request: Request) {
+  const startedAt = performance.now();
+
   try {
     const { searchParams } = new URL(request.url);
     const {
@@ -273,16 +292,24 @@ export async function GET(request: Request) {
     } = getDateRangeSearchParamBounds(searchParams);
 
     if (hasInvalidDateInput) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/players",
+        request,
+        startedAt,
         { error: "Invalid date filter" },
-        { status: 400 }
+        { status: 400 },
+        { reason: "invalid-date-filter" }
       );
     }
 
     if (hasInvertedDateRange) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/players",
+        request,
+        startedAt,
         { error: "Start date must be on or before the end date" },
-        { status: 400 }
+        { status: 400 },
+        { reason: "inverted-date-filter" }
       );
     }
 
@@ -304,7 +331,19 @@ export async function GET(request: Request) {
       "players"
     );
 
-    return NextResponse.json(players);
+    return jsonWithApiDebug(
+      "/api/players",
+      request,
+      startedAt,
+      players,
+      undefined,
+      {
+        rows: players.length,
+        hasDateFilter,
+        source: hasDateFilter ? "db" : "unstable_cache",
+        pictureHosts: getPictureHostCounts(players),
+      }
+    );
   } catch (error) {
     console.error("[GET /api/players] Error fetching players:", error);
     const errorWithMeta = error as Error & { meta?: unknown; code?: string };
@@ -320,12 +359,16 @@ export async function GET(request: Request) {
       errorDetails.code = errorWithMeta.code;
     }
     console.error("[GET /api/players] Error details:", errorDetails);
-    return NextResponse.json(
+    return jsonWithApiDebug(
+      "/api/players",
+      request,
+      startedAt,
       {
         error: "Failed to fetch players",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
+      { reason: "exception" }
     );
   }
 }

@@ -1,6 +1,7 @@
 import { resolvePlayerPairByQueryValues } from "@/lib/server/playerQueryResolver";
 import { prisma } from "@/lib/prisma";
 import { getDateRangeSearchParamBounds } from "@/lib/dateRange";
+import { jsonWithApiDebug } from "@/lib/server/apiDebug";
 import {
   parseMatchResultFilter,
   parseMatchStockFilter,
@@ -11,7 +12,6 @@ import {
   getCanonicalCharacterName,
 } from "@/utils/characterMapping";
 import { Prisma } from "@prisma/client";
-import { NextResponse } from "next/server";
 
 interface MatchupStats {
   wins: number;
@@ -111,6 +111,8 @@ const parseTimeRange = (value: string | null): MatchupTimeRange => {
 };
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
+
   try {
     const { searchParams } = new URL(request.url);
     const recentLimitInput = Number(searchParams.get("recentLimit") || "5");
@@ -216,7 +218,7 @@ export async function GET(request: Request) {
         `
       );
 
-      return NextResponse.json({
+      const body = {
         recentMatchups: recentMatchups.map((matchup) => ({
           matchId: Number(matchup.match_id),
           created_at: matchup.created_at.toISOString(),
@@ -251,7 +253,20 @@ export async function GET(request: Request) {
             won: matchup.player2_won,
           },
         })),
-      });
+      };
+
+      return jsonWithApiDebug(
+        "/api/matchups",
+        request,
+        startedAt,
+        body,
+        undefined,
+        {
+          mode: "recent",
+          rows: body.recentMatchups.length,
+          recentLimit,
+        }
+      );
     }
 
     const playerOneQueryValue = searchParams.get("player1")?.trim() || "";
@@ -293,16 +308,24 @@ export async function GET(request: Request) {
     );
 
     if (!playerOneId || !playerTwoId) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/matchups",
+        request,
+        startedAt,
         { error: "Two valid players are required." },
-        { status: 400 }
+        { status: 400 },
+        { mode: "comparison", reason: "missing-player" }
       );
     }
 
     if (playerOneId === playerTwoId) {
-      return NextResponse.json(
+      return jsonWithApiDebug(
+        "/api/matchups",
+        request,
+        startedAt,
         { error: "Select two different players." },
-        { status: 400 }
+        { status: 400 },
+        { mode: "comparison", reason: "same-player" }
       );
     }
 
@@ -325,16 +348,24 @@ export async function GET(request: Request) {
       } = getDateRangeSearchParamBounds(searchParams);
 
       if (!startDate || !endDateExclusive || hasInvalidDateInput) {
-        return NextResponse.json(
+        return jsonWithApiDebug(
+          "/api/matchups",
+          request,
+          startedAt,
           { error: "A valid custom start and end date are required." },
-          { status: 400 }
+          { status: 400 },
+          { mode: "comparison", reason: "invalid-custom-date" }
         );
       }
 
       if (hasInvertedDateRange) {
-        return NextResponse.json(
+        return jsonWithApiDebug(
+          "/api/matchups",
+          request,
+          startedAt,
           { error: "Custom start date must be on or before the end date." },
-          { status: 400 }
+          { status: 400 },
+          { mode: "comparison", reason: "inverted-custom-date" }
         );
       }
 
@@ -689,7 +720,7 @@ export async function GET(request: Request) {
       recent_matches: [],
     };
 
-    return NextResponse.json({
+    const body = {
       overallMatches: result.overall_matches,
       totalMatches: result.total_matches,
       availableCharacters: {
@@ -704,12 +735,32 @@ export async function GET(request: Request) {
         player1Character: getCanonicalCharacterName(match.player1Character),
         player2Character: getCanonicalCharacterName(match.player2Character),
       })),
-    });
+    };
+
+    return jsonWithApiDebug(
+      "/api/matchups",
+      request,
+      startedAt,
+      body,
+      undefined,
+      {
+        mode: "comparison",
+        timeRange,
+        recentLimit,
+        recentMatches: body.recentMatches.length,
+        totalMatches: body.totalMatches,
+        overallMatches: body.overallMatches,
+      }
+    );
   } catch (error) {
     console.error("[GET /api/matchups] Error fetching matchup:", error);
-    return NextResponse.json(
+    return jsonWithApiDebug(
+      "/api/matchups",
+      request,
+      startedAt,
       { error: "Failed to fetch matchup data." },
-      { status: 500 }
+      { status: 500 },
+      { reason: "exception" }
     );
   }
 }

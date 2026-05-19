@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { jsonWithApiDebug } from "@/lib/server/apiDebug";
 import { normalizeAppUrl } from "@/lib/site-url";
 import { getCanonicalCharacterName } from "@/utils/characterMapping";
 import { unstable_cache } from "next/cache";
-import { NextResponse } from "next/server";
 
 interface TeamRankingQueryResult {
   id: bigint;
@@ -266,7 +266,9 @@ const getCachedTeamRankings = unstable_cache(
   }
 );
 
-export async function GET() {
+export async function GET(request: Request) {
+  const startedAt = performance.now();
+
   try {
     console.log("[GET /api/team-rankings] Fetching team rankings (cached)...");
 
@@ -278,19 +280,33 @@ export async function GET() {
       "rows"
     );
 
-    return NextResponse.json(teamRankings);
+    return jsonWithApiDebug(
+      "/api/team-rankings",
+      request,
+      startedAt,
+      teamRankings,
+      undefined,
+      {
+        rows: teamRankings.length,
+        source: "unstable_cache",
+      }
+    );
   } catch (error) {
     console.error(
       "[GET /api/team-rankings] Error fetching team rankings:",
       error
     );
 
-    return NextResponse.json(
+    return jsonWithApiDebug(
+      "/api/team-rankings",
+      request,
+      startedAt,
       {
         error: "Failed to fetch team rankings",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
+      { reason: "exception" }
     );
   }
 }
