@@ -6,6 +6,7 @@ import {
 import { getDateRangeSearchParamBounds } from "@/lib/dateRange";
 import { resolvePlayersByQueryValues } from "@/lib/server/playerQueryResolver";
 import { jsonWithApiDebug } from "@/lib/server/apiDebug";
+import { unstable_cache } from "next/cache";
 import {
   expandCharacterAliasQueryValues,
   getCanonicalCharacterName,
@@ -35,6 +36,8 @@ const MATCH_ORDER_BY_ASC: Prisma.matchesOrderByWithRelationInput[] = [
   { id: "asc" },
 ];
 
+const MATCHES_CACHE_TAG = "matches";
+
 type MatchWithParticipants = Prisma.matchesGetPayload<{
   include: typeof MATCH_INCLUDE;
 }>;
@@ -60,6 +63,40 @@ const transformMatches = (matches: MatchWithParticipants[]) =>
       has_won: participant.has_won,
     })),
   }));
+
+const buildBaseVisibleMatchConditions = (): Prisma.matchesWhereInput[] => [
+  { archived: false },
+  {
+    match_participants: {
+      none: {
+        is_cpu: false,
+        players: {
+          is: {
+            banned: true,
+          },
+        },
+      },
+    },
+  },
+];
+
+const fetchPageMatchesFromDb = async (
+  whereConditions: Prisma.matchesWhereInput[],
+  offset: number,
+  limit: number
+) => {
+  const matches = await prisma.matches.findMany({
+    where: {
+      AND: whereConditions,
+    },
+    include: MATCH_INCLUDE,
+    orderBy: MATCH_ORDER_BY,
+    skip: offset,
+    take: limit,
+  });
+
+  return transformMatches(matches);
+};
 
 const parsePositiveInt = (
   value: string | null,
@@ -451,21 +488,7 @@ export async function GET(request: Request) {
     }
 
     // Build Prisma where conditions - all filtering at database level
-    const whereConditions: Prisma.matchesWhereInput[] = [
-      { archived: false }, // Always exclude archived matches
-      {
-        match_participants: {
-          none: {
-            is_cpu: false,
-            players: {
-              is: {
-                banned: true,
-              },
-            },
-          },
-        },
-      },
-    ];
+    const whereConditions: Prisma.matchesWhereInput[] = buildBaseVisibleMatchConditions();
 
     if (startDate || endDateExclusive) {
       whereConditions.push({
@@ -908,18 +931,20 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get matches with pagination - all filtering done at database level
-    const matches = await prisma.matches.findMany({
-      where: {
-        AND: whereConditions,
-      },
-      include: MATCH_INCLUDE,
-      orderBy: MATCH_ORDER_BY,
-      skip: offset,
-      take: limit,
-    });
+    const pageCacheKey = searchParams.toString();
+    const getCachedPageMatches = unstable_cache(
+      async () => fetchPageMatchesFromDb(whereConditions, offset, limit),
+      ["matches-page-v1", pageCacheKey],
+      {
+        tags: [MATCHES_CACHE_TAG],
+      }
+    );
 
-    if (!matches || matches.length === 0) {
+    // Get matches with pagination. The result is cached by the "matches" tag so
+    // polling does not hit the database again until the tag is revalidated.
+    const transformedMatches = await getCachedPageMatches();
+
+    if (transformedMatches.length === 0) {
       return jsonWithApiDebug(
         "/api/matches",
         request,
@@ -936,8 +961,6 @@ export async function GET(request: Request) {
         getDebugMeta({ rows: 0, reason: "no-page-matches" })
       );
     }
-
-    const transformedMatches = transformMatches(matches);
 
     console.log(
       `Returning ${transformedMatches.length} matches for page ${page}`
@@ -959,7 +982,10 @@ export async function GET(request: Request) {
       startedAt,
       body,
       undefined,
-      getDebugMeta({ rows: transformedMatches.length })
+      getDebugMeta({
+        rows: transformedMatches.length,
+        source: "unstable_cache",
+      })
     );
   } catch (error) {
     console.error("Error fetching matches:", error);
