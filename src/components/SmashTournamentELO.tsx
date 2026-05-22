@@ -2182,7 +2182,10 @@ export default function SmashTournamentELO({
     setEloDetailHistories({});
 
     try {
-      await revalidateCache(["players"]);
+      const tagsToRevalidate: CacheTag[] =
+        defaultTab === "matches" ? ["players", "matches"] : ["players"];
+
+      await revalidateCache(tagsToRevalidate);
       await fetchPlayers(
         true,
         true,
