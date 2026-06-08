@@ -77,7 +77,7 @@ interface RecentMatchupSnapshotRow {
   player2_won: boolean;
 }
 
-type MatchupTimeRange = "all" | "7d" | "30d" | "1y" | "custom";
+type MatchupTimeRange = "all" | "1d" | "7d" | "30d" | "1y" | "custom";
 
 const parseCanonicalCharacterArray = (values: string[]) =>
   Array.from(
@@ -100,6 +100,7 @@ const subtractYears = (date: Date, years: number) => {
 
 const parseTimeRange = (value: string | null): MatchupTimeRange => {
   switch (value) {
+    case "1d":
     case "7d":
     case "30d":
     case "1y":
@@ -333,7 +334,9 @@ export async function GET(request: Request) {
     let rangeStart: Date | null = null;
     let rangeEndExclusive: Date | null = null;
 
-    if (timeRange === "7d") {
+    if (timeRange === "1d") {
+      rangeStart = subtractDays(now, 1);
+    } else if (timeRange === "7d") {
       rangeStart = subtractDays(now, 7);
     } else if (timeRange === "30d") {
       rangeStart = subtractDays(now, 30);

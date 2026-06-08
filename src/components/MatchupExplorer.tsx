@@ -48,7 +48,7 @@ interface MatchupParticipantStats {
   twoStocks: number;
 }
 
-type MatchupTimeRange = "all" | "7d" | "30d" | "1y" | "custom";
+type MatchupTimeRange = "all" | "1d" | "7d" | "30d" | "1y" | "custom";
 
 interface MatchupApiResponse {
   overallMatches: number;
@@ -126,6 +126,7 @@ const isValidCountryCode = (countryCode: string | null | undefined) =>
 
 const parseMatchupTimeRange = (value: string | null): MatchupTimeRange => {
   switch (value) {
+    case "1d":
     case "7d":
     case "30d":
     case "1y":
@@ -173,6 +174,11 @@ const getPresetDateInputs = (
   const endDate = formatDateInputValue(today);
 
   switch (timeRange) {
+    case "1d":
+      return {
+        startDate: formatDateInputValue(shiftDateByDays(today, -1)),
+        endDate,
+      };
     case "7d":
       return {
         startDate: formatDateInputValue(shiftDateByDays(today, -7)),
@@ -199,6 +205,8 @@ const getTimeRangeLabel = (
   endDate: string
 ) => {
   switch (timeRange) {
+    case "1d":
+      return "Last Day";
     case "7d":
       return "Last Week";
     case "30d":
@@ -229,6 +237,7 @@ const getCharacterOptions = (options: string[], selectedValues: string[]) =>
 
 const timeRangeOptions: Array<{ value: MatchupTimeRange; label: string }> = [
   { value: "all", label: "All" },
+  { value: "1d", label: "1D" },
   { value: "7d", label: "7D" },
   { value: "30d", label: "30D" },
   { value: "1y", label: "1Y" },
