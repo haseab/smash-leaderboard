@@ -37,3 +37,24 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Live updates and bandwidth
+
+Visible leaderboard pages check `/api/data-version` once per second. The endpoint
+returns a 50-byte JSON token from Next's persistent data cache, tagged with
+`players` and `matches`. Full data is fetched on the first check, when the token
+changes, or when the selected ranking view changes. Hidden tabs pause polling;
+returning to the tab checks immediately. Failed refreshes are retried.
+
+After database writes, producers must continue calling `/api/revalidate` with the
+changed tags (as the match processor already does). Player edits invalidate the
+same tags directly. Invalidation uses immediate expiry so the first download for
+a new version contains fresh data. Direct database writes without invalidation
+will not update cached pages. Multiple app replicas require a shared Next cache
+and coordinated tag invalidation, as do the existing cached data endpoints.
+
+Run polling regression tests with Node 22.18+ or Node 24:
+
+```sh
+node --test tests/version-poller.test.mjs
+```

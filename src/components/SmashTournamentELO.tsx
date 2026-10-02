@@ -20,6 +20,7 @@ import {
   type MatchOutcomeFilterState,
 } from "@/lib/matchOutcomeFilters";
 import { Player } from "@/lib/prisma";
+import { createVersionPoller } from "@/lib/versionPoller";
 import {
   characterToFileMapping,
   getCanonicalCharacterName,
@@ -1631,7 +1632,6 @@ export default function SmashTournamentELO({
   const currentLeaderboardTab = useRef<string>("overall");
   const currentOverallRankingsView =
     useRef<OverallRankingsView>("all-characters");
-  const autoRefreshInFlight = useRef<boolean>(false);
   const lastAppliedMatchFiltersSearchKeyRef = useRef<string | null>(null);
 
   // Update refs when state changes
@@ -2632,75 +2632,97 @@ export default function SmashTournamentELO({
       }
     }
 
-    // Poll quickly; server-side caches absorb repeated reads until revalidated.
-    const refreshInterval = setInterval(() => {
-      if (
-        currentActiveTab.current !== defaultTab ||
-        autoRefreshInFlight.current ||
-        (defaultTab === "matches" && currentAutoRefreshDisabled.current)
-      ) {
-        return;
-      }
-
-      autoRefreshInFlight.current = true;
-
-      const refreshTasks: Array<Promise<unknown>> = [
-        fetchPlayers(
-          true,
-          true,
-          currentPlayerStartDateFilter.current,
-          currentPlayerEndDateFilter.current
-        ),
-      ];
-
-      if (
-        shouldLoadCharacterRankings(
-          defaultTab,
-          currentLeaderboardTab.current as LeaderboardTab,
-          currentOverallRankingsView.current
-        )
-      ) {
-        refreshTasks.push(fetchCharacterRankings(true, true));
-      }
-
-      if (
-        shouldLoadTeamRankings(
-          defaultTab,
-          currentLeaderboardTab.current as LeaderboardTab
-        )
-      ) {
-        refreshTasks.push(fetchTeamRankings(true, true));
-      }
-
-      if (defaultTab === "matches") {
-        refreshTasks.push(
-          fetchMatches(
-            1,
-            false,
-            currentPlayerFilter.current,
-            currentCharacterFilter.current,
-            current1v1Filter.current,
+    // Check a tiny token each second; only download data after invalidation.
+    // The first check also refreshes potentially stale localStorage data.
+    const poller = createVersionPoller({
+      isActive: () =>
+        document.visibilityState === "visible" &&
+        currentActiveTab.current === defaultTab &&
+        !(defaultTab === "matches" && currentAutoRefreshDisabled.current),
+      readVersion: async () => {
+        const response = await fetch("/api/data-version", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) throw new Error("Failed to check data version");
+        const data = await response.json();
+        if (typeof data.version !== "string" || !data.version) {
+          throw new Error("Invalid data version");
+        }
+        // Switching views must load that view even if another view already
+        // acknowledged this server version.
+        return JSON.stringify([
+          data.version,
+          currentLeaderboardTab.current,
+          currentOverallRankingsView.current,
+        ]);
+      },
+      onError: (error) => console.error("Error checking data version:", error),
+      refresh: async () => {
+        const refreshTasks: Array<Promise<unknown>> = [
+          fetchPlayers(
             true,
             true,
-            current2v2Filter.current,
-            currentSameTeamFilter.current,
-            currentTeamRankingFilter.current,
-            currentMatchStartDateFilter.current,
-            currentMatchEndDateFilter.current,
-            currentMatchOutcomeFilters.current
+            currentPlayerStartDateFilter.current,
+            currentPlayerEndDateFilter.current
+          ),
+        ];
+
+        if (
+          shouldLoadCharacterRankings(
+            defaultTab,
+            currentLeaderboardTab.current as LeaderboardTab,
+            currentOverallRankingsView.current
           )
+        ) {
+          refreshTasks.push(fetchCharacterRankings(true, true));
+        }
+
+        if (
+          shouldLoadTeamRankings(
+            defaultTab,
+            currentLeaderboardTab.current as LeaderboardTab
+          )
+        ) {
+          refreshTasks.push(fetchTeamRankings(true, true));
+        }
+
+        if (defaultTab === "matches") {
+          refreshTasks.push(
+            fetchMatches(
+              1,
+              false,
+              currentPlayerFilter.current,
+              currentCharacterFilter.current,
+              current1v1Filter.current,
+              true,
+              true,
+              current2v2Filter.current,
+              currentSameTeamFilter.current,
+              currentTeamRankingFilter.current,
+              currentMatchStartDateFilter.current,
+              currentMatchEndDateFilter.current,
+              currentMatchOutcomeFilters.current
+            )
+          );
+        }
+
+        const results = await Promise.allSettled(refreshTasks);
+        return results.every(
+          (result) => result.status === "fulfilled" && result.value !== false
         );
-      }
+      },
+    });
+    const checkForUpdates = () => {
+      void poller.poll();
+    };
+    const refreshInterval = setInterval(checkForUpdates, AUTO_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", checkForUpdates);
 
-      void Promise.allSettled(refreshTasks).finally(() => {
-        autoRefreshInFlight.current = false;
-      });
-    }, AUTO_REFRESH_INTERVAL_MS);
-
-    // Cleanup intervals on component unmount
     return () => {
-      autoRefreshInFlight.current = false;
+      poller.stop();
       clearInterval(refreshInterval);
+      document.removeEventListener("visibilitychange", checkForUpdates);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultTab, searchParams]);
@@ -2790,9 +2812,11 @@ export default function SmashTournamentELO({
         }
       }
 
+      return true;
     } catch (err) {
       console.error("Error fetching players:", err);
       setError("Failed to load players. Please try again later.");
+      return false;
     } finally {
       if (!isBackgroundRefresh) {
         setLoading(false);
@@ -2956,9 +2980,11 @@ export default function SmashTournamentELO({
       setCharacterRankings(data);
       setHasFetchedCharacterRankings(true);
       setLastUpdated(new Date());
+      return true;
     } catch (err) {
       console.error("Error fetching character rankings:", err);
       setError("Failed to load character rankings. Please try again later.");
+      return false;
     } finally {
       setHasFetchedCharacterRankings(true);
       if (!isBackgroundRefresh) {
@@ -2990,9 +3016,11 @@ export default function SmashTournamentELO({
       setTeamRankings(data);
       setHasFetchedTeamRankings(true);
       setLastUpdated(new Date());
+      return true;
     } catch (err) {
       console.error("Error fetching 2v2 rankings:", err);
       setError("Failed to load 2v2 rankings. Please try again later.");
+      return false;
     } finally {
       setHasFetchedTeamRankings(true);
       if (!isBackgroundRefresh) {
@@ -3279,9 +3307,11 @@ export default function SmashTournamentELO({
       } else if (currentMatchesPage.current <= 1 && matches.length === 0) {
         setHasMoreMatches(hasMore);
       }
+      return true;
     } catch (err) {
       console.error("Error fetching matches:", err);
       // Don't set error state for matches as it's secondary to players
+      return false;
     } finally {
       if (shouldUsePageLoading) {
         setLoading(false);

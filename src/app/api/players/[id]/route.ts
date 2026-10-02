@@ -38,8 +38,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Player not found" }, { status: 404 });
     }
 
-    revalidateTag("players", "max");
-    revalidateTag("matches", "max");
+    // Expire data and the version token together; do not serve stale data.
+    revalidateTag("players", { expire: 0 });
+    revalidateTag("matches", { expire: 0 });
 
     return NextResponse.json({
       id: playerId,

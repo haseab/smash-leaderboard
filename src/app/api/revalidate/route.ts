@@ -29,8 +29,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Version-based polling must never acknowledge stale data as current.
+    // Expire both the data and its tagged version before the next read.
     for (const tag of tags) {
-      revalidateTag(tag, "max");
+      revalidateTag(tag, { expire: 0 });
     }
 
     console.log(`[Revalidate] Cache invalidated for tags: ${tags.join(", ")}`);
@@ -78,8 +80,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Version-based polling must never acknowledge stale data as current.
+    // Expire both the data and its tagged version before the next read.
     for (const tag of tags) {
-      revalidateTag(tag, "max");
+      revalidateTag(tag, { expire: 0 });
     }
 
     console.log(`[Revalidate] Cache invalidated for tags: ${tags.join(", ")}`);
