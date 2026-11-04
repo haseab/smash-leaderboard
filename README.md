@@ -17,7 +17,7 @@ Then run the development server:
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3040](http://localhost:3040) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
@@ -58,3 +58,10 @@ Run polling regression tests with Node 22.18+ or Node 24:
 ```sh
 node --test tests/version-poller.test.mjs
 ```
+
+## Local development ports
+
+- The development server for **smash-leaderboard** uses **http://localhost:3040**.
+- Run `npm run dev` in the normal checkout; its development script sets port **3040** explicitly. Do not use localhost:3000 or silently increment ports.
+- Reuse an existing server for this checkout. If the assigned port is occupied by an unrelated process, inspect ownership rather than stopping another project's server.
+- Port changes must update the development script, README, environment examples, and local integration/callback URLs together. Keep real credentials in ignored local environment files; never commit them or change production URLs for local development.
